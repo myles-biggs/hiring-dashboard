@@ -1,13 +1,155 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../app/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  image     String?
+  role      Role     @default(HIRING_MANAGER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+}
+
+enum Role {
+  HR
+  HIRING_MANAGER
+  APPROVER
+  ADMIN
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── Hiring Brief Cache ───────────────────────────────────────────────────────
+
+model HiringBrief {
+  id                   String         @id @default(cuid())
+  asanaTaskId          String         @unique
+  workableJobId        String?        @unique
+
+  roleTitle            String
+  department           String
+  hiringManagerEmail   String
+  employmentType       String
+  salaryRangeMin       Int?
+  salaryRangeMax       Int?
+  yearsExperience      String
+  reportingStructure   String
+  targetStartDate      DateTime?
+  roleSummary          String?        @db.Text
+  jdUploadUrl          String?
+  aiExpectationsNeeded Boolean        @default(false)
+  bilingualPostNeeded  Boolean        @default(false)
+
+  hardSkills           String[]
+  hardSkillsFreeText   String?
+  softSkills           String[]
+  softSkillsFreeText   String?
+
+  approvalStatus       ApprovalStatus @default(PENDING)
+  approverName         String?
+  approvedAt           DateTime?
+  approvalNote         String?
+
+  jdEnglish            String?        @db.Text
+  jdFrench             String?        @db.Text
+  jdGeneratedAt        DateTime?
+
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  candidateCache CandidateCache[]
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  ESCALATED
+}
+
+// ─── Candidate Cache ──────────────────────────────────────────────────────────
+
+model CandidateCache {
+  id                  String   @id @default(cuid())
+  workableCandidateId String   @unique
+  workableJobId       String
+
+  name                String
+  email               String
+  currentStage        String
+  appliedAt           DateTime
+
+  resumeUrl           String?
+  linkedinUrl         String?
+
+  aiVetScore          Int?
+  aiVetStatus         String?
+  aiVetSummary        String?  @db.Text
+  aiVetQuestions      String[]
+  aiVetRunAt          DateTime?
+
+  briefId             String?
+  brief               HiringBrief? @relation(fields: [briefId], references: [id])
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([workableJobId])
+}
+
+// ─── Audit Log ────────────────────────────────────────────────────────────────
+
+model AuditEvent {
+  id         String   @id @default(cuid())
+  actorEmail String
+  eventType  String
+  entityId   String
+  entityType String
+  metadata   Json?
+  createdAt  DateTime @default(now())
 }
