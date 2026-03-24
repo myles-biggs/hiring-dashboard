@@ -34,8 +34,14 @@ export const authOptions: NextAuthOptions = {
       const primaryApprover = process.env.APPROVER_PRIMARY_EMAIL ?? "";
       const backupApprover = process.env.APPROVER_BACKUP_EMAIL ?? "";
 
+      const adminEmails = (process.env.ADMIN_EMAILS ?? "")
+        .split(",")
+        .map((e) => e.trim())
+        .filter(Boolean);
+
       let role: Role = Role.HIRING_MANAGER;
-      if (hrEmails.includes(user.email)) role = Role.HR;
+      if (adminEmails.includes(user.email)) role = Role.ADMIN;
+      else if (hrEmails.includes(user.email)) role = Role.HR;
       else if ([primaryApprover, backupApprover].filter(Boolean).includes(user.email))
         role = Role.APPROVER;
 

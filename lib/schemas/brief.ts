@@ -1,16 +1,22 @@
 import { z } from "zod"
 
 export const DEPARTMENTS = [
-  "Paid Search",
-  "Paid Social",
+  "Sales",
+  "Marketing",
+  "Partnerships",
+  "Media",
+  "Creative",
   "SEO",
-  "Programmatic",
-  "Analytics",
-  "Client Strategy",
-  "People Ops",
+  "Dev",
+  "Martech & Analytics",
+  "Strategy",
+  "Clients",
+  "People",
+  "Technology",
+  "Integration",
   "Finance",
-  "Tech Enablement",
-  "Leadership",
+  "AI",
+  "Exec Office",
 ] as const
 
 export const EMPLOYMENT_TYPES = ["Full-time", "Part-time", "Contract", "Freelance"] as const

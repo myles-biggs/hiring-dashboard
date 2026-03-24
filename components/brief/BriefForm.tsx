@@ -30,7 +30,11 @@ export function BriefForm() {
 
     if (!res.ok) {
       const body = await res.json()
-      setError(body.error?.formErrors?.[0] ?? "Something went wrong. Please try again.")
+      setError(
+        typeof body.error === "string"
+          ? body.error
+          : body.error?.formErrors?.[0] ?? "Something went wrong. Please try again."
+      )
       setSubmitting(false)
       return
     }
