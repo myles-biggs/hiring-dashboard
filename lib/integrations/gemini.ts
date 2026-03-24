@@ -25,3 +25,22 @@ export async function generateText(
   const result = await generativeModel.generateContent(userMessage);
   return result.response.text();
 }
+
+export async function generateJson<T = unknown>(
+  systemPrompt: string,
+  userMessage: string,
+  model = "gemini-2.0-flash"
+): Promise<T> {
+  const client = getGeminiClient();
+  const generativeModel = client.getGenerativeModel({
+    model,
+    systemInstruction: systemPrompt,
+    generationConfig: {
+      responseMimeType: "application/json",
+    },
+  });
+
+  const result = await generativeModel.generateContent(userMessage);
+  const text = result.response.text();
+  return JSON.parse(text) as T;
+}

@@ -1,8 +1,8 @@
 export const maxDuration = 60;
 
 import { authOptions } from "@/lib/auth/config";
-import { generateText } from "@/lib/integrations/gemini";
-import { JD_SYSTEM_PROMPT, buildJDPrompt } from "@/lib/prompts/jd-generator";
+import { generateJson } from "@/lib/integrations/gemini";
+import { JOB_POST_SYSTEM_PROMPT, buildJobPostPrompt } from "@/lib/prompts/jd-generator";
 import { requireRole, AuthError } from "@/lib/auth/roles";
 import { prisma } from "@/lib/utils/prisma";
 import { getServerSession } from "next-auth";
@@ -38,21 +38,21 @@ export async function POST(
 
   if (brief.approvalStatus !== "APPROVED") {
     return NextResponse.json(
-      { error: "Brief must be approved before generating a JD" },
+      { error: "Brief must be approved before generating a job post" },
       { status: 422 }
     );
   }
 
-  const prompt = buildJDPrompt(brief);
-  const raw = await generateText(JD_SYSTEM_PROMPT, prompt);
-
   let parsed: { english: string; french: string | null };
   try {
-    const cleaned = raw.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim();
-    parsed = JSON.parse(cleaned);
-  } catch {
+    parsed = await generateJson<{ english: string; french: string | null }>(
+      JOB_POST_SYSTEM_PROMPT,
+      buildJobPostPrompt(brief)
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json(
-      { error: "Failed to parse JD from AI response", raw },
+      { error: `Failed to generate job post: ${message}` },
       { status: 502 }
     );
   }
@@ -69,7 +69,7 @@ export async function POST(
   await prisma.auditEvent.create({
     data: {
       actorEmail,
-      eventType: "JD_GENERATED",
+      eventType: "JOB_POST_GENERATED",
       entityId: briefId,
       entityType: "HiringBrief",
     },
