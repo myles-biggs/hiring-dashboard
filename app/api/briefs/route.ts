@@ -53,9 +53,10 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     await prisma.hiringBrief.delete({ where: { id: brief.id } });
-    console.error("Asana task creation failed — brief rolled back:", err);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("Asana task creation failed — brief rolled back:", msg);
     return NextResponse.json(
-      { error: "Failed to create Asana task. Please try again." },
+      { error: `Asana error: ${msg}` },
       { status: 502 }
     );
   }
