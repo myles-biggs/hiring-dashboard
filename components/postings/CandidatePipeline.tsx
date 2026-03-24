@@ -34,6 +34,9 @@ export function CandidatePipeline({
   const [movingId, setMovingId] = useState<string | null>(null);
   const [vettingId, setVettingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [closePrompt, setClosePrompt] = useState<{ candidateId: string; stageSlug: string } | null>(null);
+  const [closing, setClosing] = useState(false);
+  const [jobClosed, setJobClosed] = useState(false);
 
   const activeStages = stages.filter((s) => s.kind !== "disqualified");
   const activeCandidates = candidates.filter((c) => !c.disqualified);
@@ -45,6 +48,16 @@ export function CandidatePipeline({
   }
 
   async function moveCandidate(candidateId: string, targetStageSlug: string) {
+    // If moving to a hired stage, prompt to close the job first
+    const targetStage = stages.find((s) => s.slug === targetStageSlug);
+    if (targetStage?.kind === "hired") {
+      setClosePrompt({ candidateId, stageSlug: targetStageSlug });
+      return;
+    }
+    await executeMoveCandidate(candidateId, targetStageSlug);
+  }
+
+  async function executeMoveCandidate(candidateId: string, targetStageSlug: string) {
     setMovingId(candidateId);
     setError(null);
 
@@ -72,6 +85,29 @@ export function CandidatePipeline({
       );
     }
     setMovingId(null);
+  }
+
+  async function confirmHiredAndClose() {
+    if (!closePrompt) return;
+    await executeMoveCandidate(closePrompt.candidateId, closePrompt.stageSlug);
+    setClosing(true);
+
+    const res = await fetch(`/api/postings/${jobShortcode}/close`, { method: "POST" });
+    if (!res.ok) {
+      const body = await res.json();
+      setError(body.error ?? "Failed to close job.");
+    } else {
+      setJobClosed(true);
+    }
+
+    setClosing(false);
+    setClosePrompt(null);
+  }
+
+  async function confirmHiredOnly() {
+    if (!closePrompt) return;
+    await executeMoveCandidate(closePrompt.candidateId, closePrompt.stageSlug);
+    setClosePrompt(null);
   }
 
   async function runVet(candidate: WorkableCandidate) {
@@ -104,6 +140,45 @@ export function CandidatePipeline({
 
   return (
     <div className="space-y-6">
+      {/* Hired confirmation modal */}
+      {closePrompt && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 max-w-md w-full mx-4">
+            <h2 className="text-lg font-semibold text-gray-900 mb-2">Mark as Hired</h2>
+            <p className="text-sm text-gray-600 mb-6">
+              Do you want to close this job posting on Workable now that a candidate has been hired?
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setClosePrompt(null)}
+                className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmHiredOnly}
+                className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Mark hired, keep open
+              </button>
+              <button
+                onClick={confirmHiredAndClose}
+                disabled={closing}
+                className="px-4 py-2 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
+              >
+                {closing ? "Closing..." : "Mark hired & close posting"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {jobClosed && (
+        <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+          Job posting closed on Workable.
+        </div>
+      )}
+
       {error && (
         <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
           {error}
