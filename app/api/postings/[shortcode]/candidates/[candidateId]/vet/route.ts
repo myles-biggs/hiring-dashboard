@@ -1,6 +1,6 @@
 import { authOptions } from "@/lib/auth/config";
 import { getCandidate } from "@/lib/integrations/workable";
-import { generateText } from "@/lib/integrations/gemini";
+import { generateJson } from "@/lib/integrations/gemini";
 import { RESUME_VET_SYSTEM_PROMPT, buildVetPrompt } from "@/lib/prompts/resume-vet";
 import { requireRole, AuthError } from "@/lib/auth/roles";
 import { prisma } from "@/lib/utils/prisma";
@@ -58,8 +58,6 @@ export async function POST(
     brief?.roleSummary ?? undefined
   );
 
-  const raw = await generateText(RESUME_VET_SYSTEM_PROMPT, prompt);
-
   let vetResult: {
     status: string;
     score: number;
@@ -69,17 +67,17 @@ export async function POST(
   };
 
   try {
-    const cleaned = raw.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim();
-    const result = JSON.parse(cleaned);
+    const result = await generateJson<typeof vetResult>(RESUME_VET_SYSTEM_PROMPT, prompt);
     vetResult = {
       status: result.status,
       score: result.score,
       summary: result.summary,
-      aPlayerSignals: result.aPlayerSignals ?? result.aPLayerSignals ?? {},
+      aPlayerSignals: result.aPlayerSignals ?? {},
       suggestedInterviewQuestions: result.suggestedInterviewQuestions ?? [],
     };
-  } catch {
-    return NextResponse.json({ error: "Failed to parse AI vet response", raw }, { status: 502 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json({ error: `AI vetting failed: ${message}` }, { status: 502 });
   }
 
   // Upsert into CandidateCache
