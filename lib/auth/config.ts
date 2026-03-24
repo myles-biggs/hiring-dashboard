@@ -39,15 +39,11 @@ export const authOptions: NextAuthOptions = {
       else if ([primaryApprover, backupApprover].filter(Boolean).includes(user.email))
         role = Role.APPROVER;
 
-      await prisma.user.upsert({
+      // Update only — never create. The Prisma adapter handles user creation.
+      // On first sign-in the user doesn't exist yet so updateMany is a no-op.
+      await prisma.user.updateMany({
         where: { email: user.email },
-        update: { role },
-        create: {
-          email: user.email,
-          name: user.name ?? null,
-          image: user.image ?? null,
-          role,
-        },
+        data: { role },
       });
 
       return true;
