@@ -95,6 +95,49 @@ export async function addCandidateNote(
   });
 }
 
+export interface WorkableStageOption {
+  slug: string;
+  name: string;
+  kind: string;
+  position: number;
+}
+
+export async function getJobStages(jobShortcode: string): Promise<WorkableStageOption[]> {
+  const data = await workableFetch<{ stages: WorkableStageOption[] }>(
+    `/jobs/${jobShortcode}/stages`
+  );
+  return data.stages;
+}
+
+export async function moveCandidate(
+  jobShortcode: string,
+  candidateId: string,
+  targetStageSlug: string
+): Promise<void> {
+  await workableFetch(`/jobs/${jobShortcode}/candidates/${candidateId}/move`, {
+    method: "POST",
+    body: JSON.stringify({ stage_slug: targetStageSlug }),
+  });
+}
+
+export async function disqualifyCandidate(
+  jobShortcode: string,
+  candidateId: string,
+  reason: string
+): Promise<void> {
+  await workableFetch(`/jobs/${jobShortcode}/candidates/${candidateId}/disqualify`, {
+    method: "POST",
+    body: JSON.stringify({ disqualification_reason: reason }),
+  });
+}
+
+export async function closeJob(jobShortcode: string): Promise<void> {
+  await workableFetch(`/jobs/${jobShortcode}`, {
+    method: "PATCH",
+    body: JSON.stringify({ job: { state: "closed" } }),
+  });
+}
+
 // Workable does not sign webhook payloads. We verify via a shared token
 // embedded in the webhook URL query string (?token=...).
 export function verifyWebhookToken(token: string | null): boolean {

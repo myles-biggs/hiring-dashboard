@@ -18,6 +18,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <div className="flex items-center gap-6 text-sm">
               <NavLink href="/dashboard">Dashboard</NavLink>
               <NavLink href="/briefs">Briefs</NavLink>
+              <NavLink href="/postings">Active Postings</NavLink>
             </div>
           </div>
           <UserMenu user={session.user} />

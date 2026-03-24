@@ -22,8 +22,8 @@ Output format: return valid JSON with this exact structure:
   "status": "Qualified" | "Unqualified",
   "score": 0-100,
   "summary": "2-3 sentence plain-language assessment",
-  "aPLayerSignals": {
-    "aiFluentcy": "pass" | "flag" | "no_evidence",
+  "aPlayerSignals": {
+    "aiFluency": "pass" | "flag" | "no_evidence",
     "systemsThinking": "pass" | "flag" | "no_evidence",
     "ownershipMindset": "pass" | "flag" | "no_evidence",
     "resilienceInAmbiguity": "pass" | "flag" | "no_evidence"
