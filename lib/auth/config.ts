@@ -20,68 +20,18 @@ export const authOptions: NextAuthOptions = {
           where: { id: user.id },
           select: { role: true },
         });
-        session.user.role = dbUser?.role ?? Role.HIRING_MANAGER;
-      }
-      return session;
-    },
-    async signIn({ user }) {
-      // Auto-assign roles based on known email addresses.
-      // Roles are re-evaluated on every sign-in so env changes take effect immediately.
-      if (!user.email) return false;
-
-      const hrEmails = (process.env.HR_EMAILS ?? "")
-        .split(",")
-        .map((e) => e.trim())
-        .filter(Boolean);
-      const primaryApprover = process.env.APPROVER_PRIMARY_EMAIL ?? "";
-      const backupApprover = process.env.APPROVER_BACKUP_EMAIL ?? "";
-
-      let role: Role = Role.HIRING_MANAGER;
-      if (hrEmails.includes(user.email)) role = Role.HR;
-      else if ([primaryApprover, backupApprover].filter(Boolean).includes(user.email))
-        role = Role.APPROVER;
-
-      // Upsert — always write role so env changes propagate on next sign-in
-      await prisma.user.upsert({
-        where: { email: user.email },
-        update: { role },
-        create: {
-          email: user.email,
-          name: user.name ?? null,
-          image: user.image ?? null,
-          role,
-        },
-      });
-
-      return true;
-    },
-  },
-  pages: {
-    signIn: "/login",
-    error: "/login",
-  },
-  session: {
+         session: {
     strategy: "database",
   },
   useSecureCookies: true,
   cookies: {
     pkceCodeVerifier: {
       name: "next-auth.pkce.code_verifier",
-      options: {
-        httpOnly: true,
-        sameSite: "none",
-        path: "/",
-        secure: true,
-      },
+      options: { httpOnly: true, sameSite: "none", path: "/", secure: true },
     },
     state: {
       name: "next-auth.state",
-      options: {
-        httpOnly: true,
-        sameSite: "none",
-        path: "/",
-        secure: true,
-      },
+      options: { httpOnly: true, sameSite: "none", path: "/", secure: true },
     },
   },
 };
