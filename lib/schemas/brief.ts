@@ -19,7 +19,7 @@ export const DEPARTMENTS = [
   "Exec Office",
 ] as const
 
-export const EMPLOYMENT_TYPES = ["Full-time", "Part-time", "Contract", "Freelance"] as const
+export const EMPLOYMENT_TYPES = ["Full-time", "Part-time"] as const
 
 export const briefSchema = z.object({
   roleTitle: z.string().min(2, "Role title is required"),
