@@ -42,8 +42,8 @@ Output format: return valid JSON with this exact structure:
 export function buildVetPrompt(
   candidate: WorkableCandidate,
   roleTitle: string,
-  hardSkills: string[],
-  softSkills: string[],
+  hardSkills: string | null,
+  softSkills: string | null,
   roleSummary?: string
 ): string {
   const experienceSummary = candidate.experience_entries
@@ -60,8 +60,8 @@ export function buildVetPrompt(
   return `Evaluate this candidate for the ${roleTitle} role at Level Agency.
 
 Role requirements:
-- Hard skills needed: ${hardSkills.join(", ")}
-- Soft skills needed: ${softSkills.join(", ")}
+- Hard skills needed: ${hardSkills ?? "Not specified"}
+- Soft skills needed: ${softSkills ?? "Not specified"}
 ${roleSummary ? `- Role context: ${roleSummary}` : ""}
 
 Candidate profile:

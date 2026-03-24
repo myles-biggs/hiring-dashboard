@@ -5,10 +5,6 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ApprovalBadge } from "@/components/brief/ApprovalBadge";
 import { ApprovalActions } from "@/components/brief/ApprovalActions";
-import {
-  HARD_SKILL_LABELS,
-  SOFT_SKILL_LABELS,
-} from "@/lib/schemas/brief";
 
 export default async function BriefDetailPage({
   params,
@@ -56,20 +52,28 @@ export default async function BriefDetailPage({
       <div className="space-y-6">
         <Section title="Role details">
           <Row label="Employment type" value={brief.employmentType} />
-          <Row label="Salary range" value={
-            brief.salaryRangeMin && brief.salaryRangeMax
-              ? `$${brief.salaryRangeMin.toLocaleString()} – $${brief.salaryRangeMax.toLocaleString()}`
-              : brief.salaryRangeMin
-              ? `From $${brief.salaryRangeMin.toLocaleString()}`
-              : "Not specified"
-          } />
-          <Row label="Years of experience" value={brief.yearsExperience} />
-          <Row label="Reporting to" value={brief.reportingStructure} />
-          <Row label="Target start" value={
-            brief.targetStartDate
-              ? new Date(brief.targetStartDate).toLocaleDateString("en-CA")
-              : "Flexible"
-          } />
+          <Row
+            label="Salary range"
+            value={
+              brief.salaryRangeMin && brief.salaryRangeMax
+                ? `$${brief.salaryRangeMin.toLocaleString()} – $${brief.salaryRangeMax.toLocaleString()}`
+                : brief.salaryRangeMin
+                ? `From $${brief.salaryRangeMin.toLocaleString()}`
+                : "Not specified"
+            }
+          />
+          <Row
+            label="Years of experience"
+            value={brief.yearsExperience != null ? String(brief.yearsExperience) : "Not specified"}
+          />
+          <Row
+            label="Target start"
+            value={
+              brief.targetStartDate
+                ? new Date(brief.targetStartDate).toLocaleDateString("en-CA")
+                : "Flexible"
+            }
+          />
           <Row label="Hiring manager" value={brief.hiringManagerEmail} />
         </Section>
 
@@ -79,54 +83,34 @@ export default async function BriefDetailPage({
           </Section>
         )}
 
-        <Section title="Skills">
-          {brief.hardSkills.length > 0 && (
-            <div className="mb-3">
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Hard skills</p>
-              <div className="flex flex-wrap gap-2">
-                {brief.hardSkills.map((s: string) => (
-                  <span key={s} className="px-2.5 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">
-                    {HARD_SKILL_LABELS[s as keyof typeof HARD_SKILL_LABELS] ?? s}
-                  </span>
-                ))}
-                {brief.hardSkillsFreeText && (
-                  <span className="px-2.5 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">
-                    {brief.hardSkillsFreeText}
-                  </span>
-                )}
+        {(brief.hardSkills || brief.softSkills) && (
+          <Section title="Skills">
+            {brief.hardSkills && (
+              <div className="mb-3">
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                  Hard skills
+                </p>
+                <p className="text-sm text-gray-700">{brief.hardSkills}</p>
               </div>
-            </div>
-          )}
-          {brief.softSkills.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Soft skills</p>
-              <div className="flex flex-wrap gap-2">
-                {brief.softSkills.map((s: string) => (
-                  <span key={s} className="px-2.5 py-1 bg-blue-50 text-blue-700 text-xs rounded-full">
-                    {SOFT_SKILL_LABELS[s as keyof typeof SOFT_SKILL_LABELS] ?? s}
-                  </span>
-                ))}
-                {brief.softSkillsFreeText && (
-                  <span className="px-2.5 py-1 bg-blue-50 text-blue-700 text-xs rounded-full">
-                    {brief.softSkillsFreeText}
-                  </span>
-                )}
+            )}
+            {brief.softSkills && (
+              <div>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                  Soft skills
+                </p>
+                <p className="text-sm text-gray-700">{brief.softSkills}</p>
               </div>
-            </div>
-          )}
-        </Section>
-
-        <Section title="Post options">
-          <Row label="AI expectations section" value={brief.aiExpectationsNeeded ? "Yes" : "No"} />
-          <Row label="Bilingual post (EN + FR)" value={brief.bilingualPostNeeded ? "Yes" : "No"} />
-        </Section>
+            )}
+          </Section>
+        )}
 
         {brief.approvalNote && (
           <Section title="Approval note">
             <p className="text-sm text-gray-700">{brief.approvalNote}</p>
             {brief.approverName && (
               <p className="text-xs text-gray-400 mt-2">
-                — {brief.approverName}, {brief.approvedAt ? new Date(brief.approvedAt).toLocaleDateString("en-CA") : ""}
+                — {brief.approverName},{" "}
+                {brief.approvedAt ? new Date(brief.approvedAt).toLocaleDateString("en-CA") : ""}
               </p>
             )}
           </Section>

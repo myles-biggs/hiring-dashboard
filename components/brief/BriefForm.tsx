@@ -1,65 +1,42 @@
-"use client";
+"use client"
 
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
-import {
-  briefSchema,
-  BriefFormValues,
-  DEPARTMENTS,
-  EMPLOYMENT_TYPES,
-  HARD_SKILLS,
-  HARD_SKILL_LABELS,
-  SOFT_SKILLS,
-  SOFT_SKILL_LABELS,
-} from "@/lib/schemas/brief";
-import { SkillsSelector } from "./SkillsSelector";
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { useRouter } from "next/navigation"
+import { useState } from "react"
+import { briefSchema, BriefFormValues, DEPARTMENTS, EMPLOYMENT_TYPES } from "@/lib/schemas/brief"
 
 export function BriefForm() {
-  const router = useRouter();
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const router = useRouter()
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const {
     register,
     handleSubmit,
-    watch,
-    setValue,
     formState: { errors },
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } = useForm<BriefFormValues>({
-    resolver: zodResolver(briefSchema) as any,
-    defaultValues: {
-      hardSkills: [],
-      softSkills: [],
-      aiExpectationsNeeded: false,
-      bilingualPostNeeded: false,
-    },
-  });
-
-  const hardSkills = watch("hardSkills");
-  const softSkills = watch("softSkills");
+  } = useForm<BriefFormValues>({ resolver: zodResolver(briefSchema) as any })
 
   async function onSubmit(data: BriefFormValues) {
-    setSubmitting(true);
-    setError(null);
+    setSubmitting(true)
+    setError(null)
 
     const res = await fetch("/api/briefs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
-    });
+    })
 
     if (!res.ok) {
-      const body = await res.json();
-      setError(body.error?.formErrors?.[0] ?? "Something went wrong. Please try again.");
-      setSubmitting(false);
-      return;
+      const body = await res.json()
+      setError(body.error?.formErrors?.[0] ?? "Something went wrong. Please try again.")
+      setSubmitting(false)
+      return
     }
 
-    const { id } = await res.json();
-    router.push(`/briefs/${id}`);
+    const { id } = await res.json()
+    router.push(`/briefs/${id}`)
   }
 
   return (
@@ -92,7 +69,12 @@ export function BriefForm() {
           </Field>
 
           <Field label="Hiring manager email" error={errors.hiringManagerEmail?.message}>
-            <input {...register("hiringManagerEmail")} type="email" placeholder="manager@levelagency.com" className={inputClass} />
+            <input
+              {...register("hiringManagerEmail")}
+              type="email"
+              placeholder="manager@levelagency.com"
+              className={inputClass}
+            />
           </Field>
 
           <Field label="Salary range min ($)" error={errors.salaryRangeMin?.message}>
@@ -114,17 +96,18 @@ export function BriefForm() {
           </Field>
 
           <Field label="Years of experience required" error={errors.yearsExperience?.message}>
-            <input {...register("yearsExperience")} placeholder="e.g. 2-4 years" className={inputClass} />
+            <input
+              {...register("yearsExperience", { valueAsNumber: true })}
+              type="number"
+              placeholder="3"
+              className={inputClass}
+            />
           </Field>
 
           <Field label="Target start date" error={errors.targetStartDate?.message}>
             <input {...register("targetStartDate")} type="date" className={inputClass} />
           </Field>
         </div>
-
-        <Field label="Reporting structure" error={errors.reportingStructure?.message}>
-          <input {...register("reportingStructure")} placeholder="e.g. Reports to Director of SEO" className={inputClass} />
-        </Field>
 
         <Field label="Role summary" error={errors.roleSummary?.message}>
           <textarea
@@ -137,43 +120,26 @@ export function BriefForm() {
       </section>
 
       {/* Skills */}
-      <section className="bg-white rounded-xl border border-gray-200 p-6 space-y-6">
+      <section className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
         <h2 className="font-semibold text-gray-900">Skills</h2>
 
-        <SkillsSelector
-          label="Hard skills"
-          options={HARD_SKILLS.map((v) => ({ value: v, label: HARD_SKILL_LABELS[v] }))}
-          selected={hardSkills}
-          onChange={(v) => setValue("hardSkills", v)}
-          freeTextValue={watch("hardSkillsFreeText") ?? ""}
-          onFreeTextChange={(v) => setValue("hardSkillsFreeText", v)}
-          freeTextPlaceholder="Additional hard skills..."
-        />
+        <Field label="Hard skills required" error={errors.hardSkills?.message}>
+          <textarea
+            {...register("hardSkills")}
+            rows={2}
+            placeholder="e.g. Google Ads, Meta Ads, data analysis, client communication"
+            className={inputClass}
+          />
+        </Field>
 
-        <SkillsSelector
-          label="Soft skills"
-          options={SOFT_SKILLS.map((v) => ({ value: v, label: SOFT_SKILL_LABELS[v] }))}
-          selected={softSkills}
-          onChange={(v) => setValue("softSkills", v)}
-          freeTextValue={watch("softSkillsFreeText") ?? ""}
-          onFreeTextChange={(v) => setValue("softSkillsFreeText", v)}
-          freeTextPlaceholder="Additional soft skills..."
-        />
-      </section>
-
-      {/* Options */}
-      <section className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-        <h2 className="font-semibold text-gray-900">Post options</h2>
-
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input {...register("aiExpectationsNeeded")} type="checkbox" className="w-4 h-4 rounded border-gray-300" />
-          <span className="text-sm text-gray-700">Include AI expectations section in the JD</span>
-        </label>
-
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input {...register("bilingualPostNeeded")} type="checkbox" className="w-4 h-4 rounded border-gray-300" />
-          <span className="text-sm text-gray-700">Bilingual post needed (English + Quebec French)</span>
-        </label>
+        <Field label="Soft skills required" error={errors.softSkills?.message}>
+          <textarea
+            {...register("softSkills")}
+            rows={2}
+            placeholder="e.g. Ownership mindset, systems thinking, comfort with ambiguity"
+            className={inputClass}
+          />
+        </Field>
       </section>
 
       {error && (
@@ -192,7 +158,7 @@ export function BriefForm() {
         </button>
       </div>
     </form>
-  );
+  )
 }
 
 function Field({
@@ -200,9 +166,9 @@ function Field({
   error,
   children,
 }: {
-  label: string;
-  error?: string;
-  children: React.ReactNode;
+  label: string
+  error?: string
+  children: React.ReactNode
 }) {
   return (
     <div>
@@ -210,8 +176,8 @@ function Field({
       {children}
       {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
     </div>
-  );
+  )
 }
 
 const inputClass =
-  "w-full text-sm border border-gray-300 rounded-lg px-3 py-2 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent bg-white";
+  "w-full text-sm border border-gray-300 rounded-lg px-3 py-2 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent bg-white"

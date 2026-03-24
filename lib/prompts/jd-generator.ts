@@ -33,14 +33,11 @@ Brief data:
 - Department: ${brief.department}
 - Employment type: ${brief.employmentType}
 - Salary range: ${formatSalaryRange(brief.salaryRangeMin, brief.salaryRangeMax)}
-- Years of experience required: ${brief.yearsExperience}
-- Reporting structure: ${brief.reportingStructure}
+- Years of experience required: ${brief.yearsExperience ?? "Not specified"}
 - Target start date: ${brief.targetStartDate ? new Date(brief.targetStartDate).toLocaleDateString("en-CA") : "Flexible"}
-- Hard skills required: ${[...brief.hardSkills, brief.hardSkillsFreeText].filter(Boolean).join(", ")}
-- Soft skills required: ${[...brief.softSkills, brief.softSkillsFreeText].filter(Boolean).join(", ")}
+- Hard skills required: ${brief.hardSkills ?? "Not specified"}
+- Soft skills required: ${brief.softSkills ?? "Not specified"}
 - Role summary: ${brief.roleSummary ?? "Not provided"}
-- Include AI expectations section: ${brief.aiExpectationsNeeded ? "Yes" : "No"}
-- Bilingual post needed: ${brief.bilingualPostNeeded ? "Yes — produce full Quebec French version" : "No — English only"}
 
-Return a JSON object with keys "english" and "french". If bilingual is not needed, set "french" to null.`;
+Return a JSON object with keys "english" and "french". Set "french" to null unless the role context specifically requires it.`;
 }
