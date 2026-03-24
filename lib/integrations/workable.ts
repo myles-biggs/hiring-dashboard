@@ -20,6 +20,47 @@ async function workableFetch<T>(path: string, options: RequestInit = {}): Promis
   return res.json() as Promise<T>;
 }
 
+export async function createJob(data: {
+  title: string;
+  department: string;
+  employmentType: string;
+  descriptionEnglish: string;
+  descriptionFrench?: string | null;
+}): Promise<{ shortcode: string; id: string }> {
+  const employmentTypeMap: Record<string, string> = {
+    "Full-time": "full-time",
+    "Part-time": "part-time",
+  };
+
+  const body: Record<string, unknown> = {
+    job: {
+      title: data.title,
+      full_title: data.title,
+      description: data.descriptionEnglish,
+      employment_type: employmentTypeMap[data.employmentType] ?? "full-time",
+      department: data.department,
+      remote: true,
+      state: "published",
+    },
+  };
+
+  if (data.descriptionFrench) {
+    body.translations = [
+      {
+        locale: "fr",
+        description: data.descriptionFrench,
+      },
+    ];
+  }
+
+  const result = await workableFetch<{ job: { shortcode: string; id: string } }>("/jobs", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+  return { shortcode: result.job.shortcode, id: result.job.id };
+}
+
 export async function getJobs(): Promise<WorkableJob[]> {
   const data = await workableFetch<{ jobs: WorkableJob[] }>("/jobs?state=published");
   return data.jobs;

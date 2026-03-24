@@ -5,6 +5,7 @@ import { requireRole, AuthError } from "@/lib/auth/roles";
 import { prisma } from "@/lib/utils/prisma";
 import { getServerSession } from "next-auth";
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 
 export async function POST(
   _req: NextRequest,
@@ -27,7 +28,6 @@ export async function POST(
   const brief = await prisma.hiringBrief.findUnique({ where: { id: briefId } });
   if (!brief) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Hiring managers may only generate JDs for briefs they own
   const isHR = session!.user.role === "HR" || session!.user.role === "ADMIN";
   const isOwner = brief.hiringManagerEmail === session!.user.email;
   if (!isHR && !isOwner) {
@@ -46,7 +46,6 @@ export async function POST(
 
   let parsed: { english: string; french: string | null };
   try {
-    // Gemini may wrap JSON in markdown code fences
     const cleaned = raw.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim();
     parsed = JSON.parse(cleaned);
   } catch {
@@ -79,4 +78,51 @@ export async function POST(
     jdFrench: updated.jdFrench,
     generatedAt: updated.jdGeneratedAt,
   });
+}
+
+const saveSchema = z.object({
+  jdEnglish: z.string().min(1),
+  jdFrench: z.string().optional().nullable(),
+});
+
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ briefId: string }> }
+) {
+  const session = await getServerSession(authOptions);
+
+  try {
+    requireRole(session, "HR", "HIRING_MANAGER", "ADMIN");
+  } catch (err) {
+    if (err instanceof AuthError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const { briefId } = await params;
+  const brief = await prisma.hiringBrief.findUnique({ where: { id: briefId } });
+  if (!brief) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const isHR = session!.user.role === "HR" || session!.user.role === "ADMIN";
+  const isOwner = brief.hiringManagerEmail === session!.user.email;
+  if (!isHR && !isOwner) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const body = await req.json();
+  const parsed = saveSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
+
+  await prisma.hiringBrief.update({
+    where: { id: briefId },
+    data: {
+      jdEnglish: parsed.data.jdEnglish,
+      jdFrench: parsed.data.jdFrench ?? null,
+    },
+  });
+
+  return NextResponse.json({ ok: true });
 }
