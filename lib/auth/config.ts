@@ -20,7 +20,44 @@ export const authOptions: NextAuthOptions = {
           where: { id: user.id },
           select: { role: true },
         });
-         session: {
+        session.user.role = dbUser?.role ?? Role.HIRING_MANAGER;
+      }
+      return session;
+    },
+    async signIn({ user }) {
+      if (!user.email) return false;
+
+      const hrEmails = (process.env.HR_EMAILS ?? "")
+        .split(",")
+        .map((e) => e.trim())
+        .filter(Boolean);
+      const primaryApprover = process.env.APPROVER_PRIMARY_EMAIL ?? "";
+      const backupApprover = process.env.APPROVER_BACKUP_EMAIL ?? "";
+
+      let role: Role = Role.HIRING_MANAGER;
+      if (hrEmails.includes(user.email)) role = Role.HR;
+      else if ([primaryApprover, backupApprover].filter(Boolean).includes(user.email))
+        role = Role.APPROVER;
+
+      await prisma.user.upsert({
+        where: { email: user.email },
+        update: { role },
+        create: {
+          email: user.email,
+          name: user.name ?? null,
+          image: user.image ?? null,
+          role,
+        },
+      });
+
+      return true;
+    },
+  },
+  pages: {
+    signIn: "/login",
+    error: "/login",
+  },
+  session: {
     strategy: "database",
   },
   useSecureCookies: true,
