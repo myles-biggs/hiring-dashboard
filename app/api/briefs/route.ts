@@ -1,5 +1,6 @@
 import { authOptions } from "@/lib/auth/config";
 import { createBriefTask } from "@/lib/integrations/asana";
+import { postBriefApprovalRequest } from "@/lib/integrations/slack";
 import { briefSchema } from "@/lib/schemas/brief";
 import { prisma } from "@/lib/utils/prisma";
 import { getServerSession } from "next-auth";
@@ -76,6 +77,22 @@ export async function POST(req: NextRequest) {
       metadata: { asanaTaskGid: asanaTask.gid, roleTitle: data.roleTitle },
     },
   });
+
+  // Notify approvers in Slack — best-effort, never block the response
+  try {
+    await postBriefApprovalRequest({
+      id: updated.id,
+      roleTitle: updated.roleTitle,
+      department: updated.department,
+      hiringManagerEmail: updated.hiringManagerEmail,
+      employmentType: updated.employmentType,
+      salaryRangeMin: updated.salaryRangeMin,
+      salaryRangeMax: updated.salaryRangeMax,
+      targetStartDate: updated.targetStartDate,
+    });
+  } catch (err) {
+    console.error("Slack notification failed — brief was saved successfully:", err);
+  }
 
   return NextResponse.json({ id: updated.id }, { status: 201 });
 }
