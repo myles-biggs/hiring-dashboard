@@ -58,6 +58,7 @@ export default async function JobPipelinePage({
 
       <CandidatePipeline
         jobShortcode={shortcode}
+        jobTitle={jobTitle}
         candidates={candidates}
         stages={stages}
         vetMap={vetMap}

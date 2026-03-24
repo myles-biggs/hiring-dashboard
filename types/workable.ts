@@ -76,6 +76,15 @@ export interface ExperienceEntry {
   current: boolean;
 }
 
+export interface WorkableEmailTemplate {
+  id: string;
+  name: string;
+  subject: string;
+  body: string;
+  auto_send: boolean;
+  state: string;
+}
+
 export interface WorkableWebhookPayload {
   event_type: "candidate_created" | "candidate_updated" | "job_created" | "job_updated";
   data: {

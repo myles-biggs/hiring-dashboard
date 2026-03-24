@@ -1,4 +1,4 @@
-import { WorkableCandidate, WorkableJob } from "@/types/workable";
+import { WorkableCandidate, WorkableEmailTemplate, WorkableJob } from "@/types/workable";
 
 const BASE_URL = `https://${process.env.WORKABLE_SUBDOMAIN}.workable.com/spi/v3`;
 
@@ -135,6 +135,31 @@ export async function closeJob(jobShortcode: string): Promise<void> {
   await workableFetch(`/jobs/${jobShortcode}`, {
     method: "PATCH",
     body: JSON.stringify({ job: { state: "closed" } }),
+  });
+}
+
+export async function getEmailTemplates(): Promise<WorkableEmailTemplate[]> {
+  const data = await workableFetch<{ email_templates: WorkableEmailTemplate[] }>(
+    "/email_templates?state=active"
+  );
+  return data.email_templates ?? [];
+}
+
+export async function sendCandidateEmail(
+  jobShortcode: string,
+  candidateId: string,
+  subject: string,
+  body: string,
+  senderEmail?: string
+): Promise<void> {
+  await workableFetch(`/jobs/${jobShortcode}/candidates/${candidateId}/activities`, {
+    method: "POST",
+    body: JSON.stringify({
+      action: "email",
+      subject,
+      body,
+      ...(senderEmail ? { sender_email: senderEmail } : {}),
+    }),
   });
 }
 

@@ -1,7 +1,8 @@
 "use client";
 
-import { WorkableCandidate, WorkableStageOption } from "@/types/workable";
-import { useState } from "react";
+import { WorkableStageOption } from "@/lib/integrations/workable";
+import { WorkableCandidate, WorkableEmailTemplate } from "@/types/workable";
+import { useEffect, useState } from "react";
 
 interface VetData {
   workableCandidateId: string;
@@ -13,6 +14,7 @@ interface VetData {
 
 interface Props {
   jobShortcode: string;
+  jobTitle?: string;
   candidates: WorkableCandidate[];
   stages: WorkableStageOption[];
   vetMap: Record<string, VetData>;
@@ -20,8 +22,401 @@ interface Props {
   jdEnglish: string | null;
 }
 
+// ─── Email Modal ──────────────────────────────────────────────────────────────
+
+function EmailModal({
+  jobShortcode,
+  candidate,
+  onClose,
+}: {
+  jobShortcode: string;
+  candidate: WorkableCandidate;
+  onClose: () => void;
+}) {
+  const [templates, setTemplates] = useState<WorkableEmailTemplate[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(true);
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/postings/templates")
+      .then((r) => r.json())
+      .then((d) => setTemplates(d.templates ?? []))
+      .catch(() => setTemplates([]))
+      .finally(() => setLoadingTemplates(false));
+  }, []);
+
+  function applyTemplate(t: WorkableEmailTemplate) {
+    setSubject(t.subject);
+    // Strip basic HTML tags for the textarea
+    setBody(t.body.replace(/<[^>]+>/g, "").trim());
+  }
+
+  async function send() {
+    if (!subject.trim() || !body.trim()) return;
+    setSending(true);
+    setError(null);
+    const res = await fetch(
+      `/api/postings/${jobShortcode}/candidates/${candidate.id}/email`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subject, body }),
+      }
+    );
+    setSending(false);
+    if (!res.ok) {
+      const d = await res.json();
+      setError(d.error ?? "Failed to send.");
+      return;
+    }
+    setSent(true);
+  }
+
+  return (
+    <Modal onClose={onClose}>
+      <h2 className="text-lg font-semibold text-gray-900 mb-1">
+        Email {candidate.name}
+      </h2>
+      <p className="text-sm text-gray-500 mb-5">{candidate.email}</p>
+
+      {sent ? (
+        <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-3 mb-4">
+          Email sent successfully.
+        </div>
+      ) : (
+        <>
+          {/* Template picker */}
+          {loadingTemplates ? (
+            <p className="text-xs text-gray-400 mb-4">Loading templates…</p>
+          ) : templates.length > 0 ? (
+            <div className="mb-4">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                Workable templates
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {templates.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => applyTemplate(t)}
+                    className="text-xs px-3 py-1.5 border border-gray-300 rounded-full text-gray-600 hover:bg-gray-50 transition-colors"
+                  >
+                    {t.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-medium text-gray-600 block mb-1">Subject</label>
+              <input
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder="Subject"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-600 block mb-1">Message</label>
+              <textarea
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                rows={8}
+                placeholder="Write your message…"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"
+              />
+            </div>
+          </div>
+
+          {error && (
+            <p className="text-sm text-red-600 mt-3">{error}</p>
+          )}
+
+          <div className="flex justify-end gap-3 mt-5">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={send}
+              disabled={sending || !subject.trim() || !body.trim()}
+              className="px-4 py-2 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
+            >
+              {sending ? "Sending…" : "Send email"}
+            </button>
+          </div>
+        </>
+      )}
+
+      {sent && (
+        <div className="flex justify-end mt-4">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+// ─── Schedule Modal ───────────────────────────────────────────────────────────
+
+const DURATIONS = [
+  { label: "15 min", value: 15 },
+  { label: "30 min", value: 30 },
+  { label: "45 min", value: 45 },
+  { label: "1 hour", value: 60 },
+  { label: "90 min", value: 90 },
+];
+
+function ScheduleModal({
+  jobShortcode,
+  jobTitle,
+  candidate,
+  onClose,
+}: {
+  jobShortcode: string;
+  jobTitle: string;
+  candidate: WorkableCandidate;
+  onClose: () => void;
+}) {
+  const defaultDate = new Date();
+  defaultDate.setDate(defaultDate.getDate() + 1);
+  defaultDate.setHours(10, 0, 0, 0);
+
+  const [title, setTitle] = useState(`Interview – ${candidate.name} for ${jobTitle}`);
+  const [date, setDate] = useState(defaultDate.toISOString().slice(0, 10));
+  const [time, setTime] = useState("10:00");
+  const [duration, setDuration] = useState(60);
+  const [addMeet, setAddMeet] = useState(true);
+  const [interviewers, setInterviewers] = useState("");
+  const [description, setDescription] = useState("");
+  const [scheduling, setScheduling] = useState(false);
+  const [result, setResult] = useState<{ htmlLink: string; meetLink?: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function schedule() {
+    const interviewerEmails = interviewers
+      .split(/[\s,]+/)
+      .map((e) => e.trim())
+      .filter(Boolean);
+
+    if (!interviewerEmails.length) {
+      setError("Add at least one interviewer email.");
+      return;
+    }
+
+    const startIso = new Date(`${date}T${time}:00`).toISOString();
+
+    setScheduling(true);
+    setError(null);
+
+    const res = await fetch(
+      `/api/postings/${jobShortcode}/candidates/${candidate.id}/schedule`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          candidateName: candidate.name,
+          candidateEmail: candidate.email,
+          title,
+          startIso,
+          durationMinutes: duration,
+          addMeet,
+          interviewerEmails,
+          description,
+        }),
+      }
+    );
+
+    setScheduling(false);
+
+    if (!res.ok) {
+      const d = await res.json();
+      setError(d.error ?? "Failed to schedule.");
+      return;
+    }
+
+    setResult(await res.json());
+  }
+
+  return (
+    <Modal onClose={onClose}>
+      <h2 className="text-lg font-semibold text-gray-900 mb-1">Schedule interview</h2>
+      <p className="text-sm text-gray-500 mb-5">{candidate.name} · {candidate.email}</p>
+
+      {result ? (
+        <div className="space-y-4">
+          <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+            Calendar invite sent to {candidate.name} and all interviewers.
+          </div>
+          <div className="space-y-2">
+            <a
+              href={result.htmlLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-gray-900 underline block"
+            >
+              View in Google Calendar →
+            </a>
+            {result.meetLink && (
+              <a
+                href={result.meetLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-green-700 underline block"
+              >
+                Google Meet link →
+              </a>
+            )}
+          </div>
+          <div className="flex justify-end mt-4">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-medium text-gray-600 block mb-1">Event title</label>
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-gray-600 block mb-1">Date</label>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600 block mb-1">Time (ET)</label>
+                <input
+                  type="time"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-gray-600 block mb-2">Duration</label>
+              <div className="flex gap-2 flex-wrap">
+                {DURATIONS.map((d) => (
+                  <button
+                    key={d.value}
+                    onClick={() => setDuration(d.value)}
+                    className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                      duration === d.value
+                        ? "bg-gray-900 text-white border-gray-900"
+                        : "border-gray-300 text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-gray-600 block mb-1">
+                Interviewer emails <span className="text-gray-400">(comma or space separated)</span>
+              </label>
+              <input
+                value={interviewers}
+                onChange={(e) => setInterviewers(e.target.value)}
+                placeholder="name@level.agency, name2@level.agency"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-gray-600 block mb-1">
+                Description <span className="text-gray-400">(optional)</span>
+              </label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={3}
+                placeholder="Interview agenda, prep notes…"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"
+              />
+            </div>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={addMeet}
+                onChange={(e) => setAddMeet(e.target.checked)}
+                className="rounded border-gray-300"
+              />
+              <span className="text-sm text-gray-700">Add Google Meet link</span>
+            </label>
+          </div>
+
+          {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
+
+          <div className="flex justify-end gap-3 mt-5">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={schedule}
+              disabled={scheduling}
+              className="px-4 py-2 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
+            >
+              {scheduling ? "Scheduling…" : "Schedule interview"}
+            </button>
+          </div>
+        </>
+      )}
+    </Modal>
+  );
+}
+
+// ─── Shared Modal Shell ───────────────────────────────────────────────────────
+
+function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+      <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Pipeline ────────────────────────────────────────────────────────────
+
 export function CandidatePipeline({
   jobShortcode,
+  jobTitle = "",
   candidates: initialCandidates,
   stages,
   vetMap: initialVetMap,
@@ -37,18 +432,18 @@ export function CandidatePipeline({
   const [closePrompt, setClosePrompt] = useState<{ candidateId: string; stageSlug: string } | null>(null);
   const [closing, setClosing] = useState(false);
   const [jobClosed, setJobClosed] = useState(false);
+  const [emailTarget, setEmailTarget] = useState<WorkableCandidate | null>(null);
+  const [scheduleTarget, setScheduleTarget] = useState<WorkableCandidate | null>(null);
 
   const activeStages = stages.filter((s) => s.kind !== "disqualified");
   const activeCandidates = candidates.filter((c) => !c.disqualified);
 
-  // Group candidates by stage
   const byStage: Record<string, WorkableCandidate[]> = {};
   for (const stage of activeStages) {
     byStage[stage.slug] = activeCandidates.filter((c) => c.stage.name === stage.name);
   }
 
   async function moveCandidate(candidateId: string, targetStageSlug: string) {
-    // If moving to a hired stage, prompt to close the job first
     const targetStage = stages.find((s) => s.slug === targetStageSlug);
     if (targetStage?.kind === "hired") {
       setClosePrompt({ candidateId, stageSlug: targetStageSlug });
@@ -91,7 +486,6 @@ export function CandidatePipeline({
     if (!closePrompt) return;
     await executeMoveCandidate(closePrompt.candidateId, closePrompt.stageSlug);
     setClosing(true);
-
     const res = await fetch(`/api/postings/${jobShortcode}/close`, { method: "POST" });
     if (!res.ok) {
       const body = await res.json();
@@ -99,7 +493,6 @@ export function CandidatePipeline({
     } else {
       setJobClosed(true);
     }
-
     setClosing(false);
     setClosePrompt(null);
   }
@@ -112,7 +505,7 @@ export function CandidatePipeline({
 
   async function runVet(candidate: WorkableCandidate) {
     if (!jdEnglish) {
-      setError("No JD available to vet against. Generate a JD for this role first.");
+      setError("No JD available. Generate a JD for this role first.");
       return;
     }
     setVettingId(candidate.id);
@@ -140,7 +533,24 @@ export function CandidatePipeline({
 
   return (
     <div className="space-y-6">
-      {/* Hired confirmation modal */}
+      {/* Modals */}
+      {emailTarget && (
+        <EmailModal
+          jobShortcode={jobShortcode}
+          candidate={emailTarget}
+          onClose={() => setEmailTarget(null)}
+        />
+      )}
+      {scheduleTarget && (
+        <ScheduleModal
+          jobShortcode={jobShortcode}
+          jobTitle={jobTitle}
+          candidate={scheduleTarget}
+          onClose={() => setScheduleTarget(null)}
+        />
+      )}
+
+      {/* Hired confirmation */}
       {closePrompt && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 max-w-md w-full mx-4">
@@ -166,7 +576,7 @@ export function CandidatePipeline({
                 disabled={closing}
                 className="px-4 py-2 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
               >
-                {closing ? "Closing..." : "Mark hired & close posting"}
+                {closing ? "Closing…" : "Mark hired & close posting"}
               </button>
             </div>
           </div>
@@ -178,7 +588,6 @@ export function CandidatePipeline({
           Job posting closed on Workable.
         </div>
       )}
-
       {error && (
         <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
           {error}
@@ -225,26 +634,30 @@ export function CandidatePipeline({
                           )}
                         </div>
 
-                        <div className="flex items-center gap-2 shrink-0">
-                          {/* AI Vet */}
+                        <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
                           <button
                             onClick={() => runVet(candidate)}
                             disabled={vettingId === candidate.id || !jdEnglish}
                             title={!jdEnglish ? "No JD available" : "Run AI vet"}
                             className="text-xs px-2.5 py-1.5 border border-gray-300 rounded-md text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
                           >
-                            {vettingId === candidate.id ? "Vetting..." : vet ? "Re-vet" : "AI Vet"}
+                            {vettingId === candidate.id ? "Vetting…" : vet ? "Re-vet" : "AI Vet"}
                           </button>
 
-                          {/* Email */}
-                          <a
-                            href={`mailto:${candidate.email}`}
+                          <button
+                            onClick={() => setEmailTarget(candidate)}
                             className="text-xs px-2.5 py-1.5 border border-gray-300 rounded-md text-gray-600 hover:bg-gray-50 transition-colors"
                           >
                             Email
-                          </a>
+                          </button>
 
-                          {/* Move backward */}
+                          <button
+                            onClick={() => setScheduleTarget(candidate)}
+                            className="text-xs px-2.5 py-1.5 border border-gray-300 rounded-md text-gray-600 hover:bg-gray-50 transition-colors"
+                          >
+                            Schedule
+                          </button>
+
                           {prevStage && (
                             <button
                               onClick={() => moveCandidate(candidate.id, prevStage.slug)}
@@ -255,7 +668,6 @@ export function CandidatePipeline({
                             </button>
                           )}
 
-                          {/* Move forward */}
                           {nextStage && (
                             <button
                               onClick={() => moveCandidate(candidate.id, nextStage.slug)}
@@ -268,7 +680,6 @@ export function CandidatePipeline({
                         </div>
                       </div>
 
-                      {/* Expanded: AI vet results */}
                       {isExpanded && vet && (
                         <div className="mt-4 bg-gray-50 rounded-lg p-4 space-y-3">
                           {vet.aiVetSummary && (
@@ -307,7 +718,6 @@ export function CandidatePipeline({
                         </div>
                       )}
 
-                      {/* Expanded: no vet data yet */}
                       {isExpanded && !vet && (
                         <div className="mt-4 bg-gray-50 rounded-lg p-4">
                           <p className="text-sm text-gray-500">
