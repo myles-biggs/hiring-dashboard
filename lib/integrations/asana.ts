@@ -109,7 +109,7 @@ export async function createBriefTask(briefId: string, fields: BriefFieldValues)
   if (fields.salaryRangeMin != null) customFields[FIELD_GIDS.salaryMin] = fields.salaryRangeMin;
   if (fields.salaryRangeMax != null) customFields[FIELD_GIDS.salaryMax] = fields.salaryRangeMax;
   if (fields.yearsExperience != null) customFields[FIELD_GIDS.yearsExperience] = fields.yearsExperience;
-  if (fields.targetStartDate) customFields[FIELD_GIDS.targetStartDate] = fields.targetStartDate;
+  if (fields.targetStartDate) customFields[FIELD_GIDS.targetStartDate] = { date: fields.targetStartDate } as unknown as string;
   if (fields.hardSkills) customFields[FIELD_GIDS.hardSkills] = fields.hardSkills;
   if (fields.softSkills) customFields[FIELD_GIDS.softSkills] = fields.softSkills;
   if (fields.roleSummary) customFields[FIELD_GIDS.roleSummary] = fields.roleSummary;
