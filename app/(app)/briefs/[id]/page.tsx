@@ -57,8 +57,10 @@ export default async function BriefDetailPage({
         <Section title="Role details">
           <Row label="Employment type" value={brief.employmentType} />
           <Row label="Salary range" value={
-            brief.salaryRangeMin
-              ? `$${brief.salaryRangeMin.toLocaleString()} – $${brief.salaryRangeMax?.toLocaleString()}`
+            brief.salaryRangeMin && brief.salaryRangeMax
+              ? `$${brief.salaryRangeMin.toLocaleString()} – $${brief.salaryRangeMax.toLocaleString()}`
+              : brief.salaryRangeMin
+              ? `From $${brief.salaryRangeMin.toLocaleString()}`
               : "Not specified"
           } />
           <Row label="Years of experience" value={brief.yearsExperience} />

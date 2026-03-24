@@ -1,7 +1,7 @@
 import { authOptions } from "@/lib/auth/config";
 import { generateText } from "@/lib/integrations/gemini";
 import { JD_SYSTEM_PROMPT, buildJDPrompt } from "@/lib/prompts/jd-generator";
-import { requireRole } from "@/lib/auth/roles";
+import { requireRole, AuthError } from "@/lib/auth/roles";
 import { prisma } from "@/lib/utils/prisma";
 import { getServerSession } from "next-auth";
 import { NextRequest, NextResponse } from "next/server";
@@ -14,13 +14,25 @@ export async function POST(
 
   try {
     requireRole(session, "HR", "HIRING_MANAGER", "ADMIN");
-  } catch {
+  } catch (err) {
+    if (err instanceof AuthError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  const actorEmail = session!.user.email ?? session!.user.id;
 
   const { briefId } = await params;
   const brief = await prisma.hiringBrief.findUnique({ where: { id: briefId } });
   if (!brief) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  // Hiring managers may only generate JDs for briefs they own
+  const isHR = session!.user.role === "HR" || session!.user.role === "ADMIN";
+  const isOwner = brief.hiringManagerEmail === session!.user.email;
+  if (!isHR && !isOwner) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   if (brief.approvalStatus !== "APPROVED") {
     return NextResponse.json(
@@ -34,7 +46,7 @@ export async function POST(
 
   let parsed: { english: string; french: string | null };
   try {
-    // Claude may wrap JSON in markdown code fences
+    // Gemini may wrap JSON in markdown code fences
     const cleaned = raw.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim();
     parsed = JSON.parse(cleaned);
   } catch {
@@ -55,7 +67,7 @@ export async function POST(
 
   await prisma.auditEvent.create({
     data: {
-      actorEmail: session!.user.email,
+      actorEmail,
       eventType: "JD_GENERATED",
       entityId: briefId,
       entityType: "HiringBrief",

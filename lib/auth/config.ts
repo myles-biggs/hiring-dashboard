@@ -25,21 +25,26 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
     async signIn({ user }) {
-      // Auto-assign roles based on known email addresses
+      // Auto-assign roles based on known email addresses.
+      // Roles are re-evaluated on every sign-in so env changes take effect immediately.
       if (!user.email) return false;
 
-      const hrEmails = (process.env.HR_EMAILS ?? "").split(",").map((e) => e.trim());
+      const hrEmails = (process.env.HR_EMAILS ?? "")
+        .split(",")
+        .map((e) => e.trim())
+        .filter(Boolean);
       const primaryApprover = process.env.APPROVER_PRIMARY_EMAIL ?? "";
       const backupApprover = process.env.APPROVER_BACKUP_EMAIL ?? "";
 
       let role: Role = Role.HIRING_MANAGER;
       if (hrEmails.includes(user.email)) role = Role.HR;
-      else if ([primaryApprover, backupApprover].includes(user.email)) role = Role.APPROVER;
+      else if ([primaryApprover, backupApprover].filter(Boolean).includes(user.email))
+        role = Role.APPROVER;
 
-      // Upsert role on first sign-in
+      // Upsert — always write role so env changes propagate on next sign-in
       await prisma.user.upsert({
         where: { email: user.email },
-        update: {},
+        update: { role },
         create: {
           email: user.email,
           name: user.name ?? null,

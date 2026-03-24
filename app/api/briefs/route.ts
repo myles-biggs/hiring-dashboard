@@ -9,6 +9,8 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const actorEmail = session.user.email ?? session.user.id;
+
   const body = await req.json();
   const parsed = briefSchema.safeParse(body);
   if (!parsed.success) {
@@ -41,18 +43,28 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // Create Asana task
-  const asanaTask = await createBriefTask(brief.id, {
-    roleTitle: data.roleTitle,
-    department: data.department,
-    hiringManager: data.hiringManagerEmail,
-    employmentType: data.employmentType as "Full Time" | "Part Time",
-    roleType: "New Role",
-    salaryRangeMin: data.salaryRangeMin,
-    salaryRangeMax: data.salaryRangeMax,
-    targetStartDate: data.targetStartDate,
-    roleSummary: data.roleSummary,
-  });
+  // Create Asana task — if this fails, clean up the orphaned local record
+  let asanaTask: Awaited<ReturnType<typeof createBriefTask>>;
+  try {
+    asanaTask = await createBriefTask(brief.id, {
+      roleTitle: data.roleTitle,
+      department: data.department,
+      hiringManager: data.hiringManagerEmail,
+      employmentType: data.employmentType,
+      roleType: "New Role",
+      salaryRangeMin: data.salaryRangeMin,
+      salaryRangeMax: data.salaryRangeMax,
+      targetStartDate: data.targetStartDate,
+      roleSummary: data.roleSummary,
+    });
+  } catch (err) {
+    await prisma.hiringBrief.delete({ where: { id: brief.id } });
+    console.error("Asana task creation failed — brief rolled back:", err);
+    return NextResponse.json(
+      { error: "Failed to create Asana task. Please try again." },
+      { status: 502 }
+    );
+  }
 
   // Update local record with real Asana task GID
   const updated = await prisma.hiringBrief.update({
@@ -62,7 +74,7 @@ export async function POST(req: NextRequest) {
 
   await prisma.auditEvent.create({
     data: {
-      actorEmail: session.user.email,
+      actorEmail,
       eventType: "BRIEF_SUBMITTED",
       entityId: brief.id,
       entityType: "HiringBrief",
@@ -77,7 +89,9 @@ export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { searchParams } = new URL(req.url);
+  // searchParams reserved for future filtering (e.g. ?status=PENDING)
+  void new URL(req.url).searchParams;
+
   const isHR = session.user.role === "HR" || session.user.role === "ADMIN";
 
   const briefs = await prisma.hiringBrief.findMany({

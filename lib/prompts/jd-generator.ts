@@ -19,6 +19,12 @@ Rules:
 - If a required field is missing from the brief, state which field is missing and ask for it before generating.
 - Output format: return JSON with keys "english" and "french".`;
 
+function formatSalaryRange(min: number | null, max: number | null): string {
+  if (min && max) return `$${min.toLocaleString()} – $${max.toLocaleString()}`;
+  if (min) return `From $${min.toLocaleString()}`;
+  return "Not specified";
+}
+
 export function buildJDPrompt(brief: HiringBrief): string {
   return `Generate a complete Level Agency job description for the following role.
 
@@ -26,7 +32,7 @@ Brief data:
 - Role title: ${brief.roleTitle}
 - Department: ${brief.department}
 - Employment type: ${brief.employmentType}
-- Salary range: ${brief.salaryRangeMin ? `$${brief.salaryRangeMin.toLocaleString()} – $${brief.salaryRangeMax?.toLocaleString()}` : "Not specified"}
+- Salary range: ${formatSalaryRange(brief.salaryRangeMin, brief.salaryRangeMax)}
 - Years of experience required: ${brief.yearsExperience}
 - Reporting structure: ${brief.reportingStructure}
 - Target start date: ${brief.targetStartDate ? new Date(brief.targetStartDate).toLocaleDateString("en-CA") : "Flexible"}

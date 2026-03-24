@@ -19,54 +19,76 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Verify webhook signature
+  // Verify webhook signature — required in all environments
+  const webhookSecret = process.env.ASANA_WEBHOOK_SECRET;
   const signature = req.headers.get("x-hook-signature");
   const rawBody = await req.text();
 
-  if (process.env.ASANA_WEBHOOK_SECRET && signature) {
-    const encoder = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-      "raw",
-      encoder.encode(process.env.ASANA_WEBHOOK_SECRET),
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["sign"]
-    );
-    const sigBuffer = await crypto.subtle.sign("HMAC", key, encoder.encode(rawBody));
-    const computed = Array.from(new Uint8Array(sigBuffer))
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
-
-    if (computed !== signature) {
-      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
-    }
+  if (!webhookSecret) {
+    console.error("ASANA_WEBHOOK_SECRET is not configured — rejecting webhook");
+    return NextResponse.json({ error: "Webhook secret not configured" }, { status: 500 });
   }
 
-  const payload = JSON.parse(rawBody);
+  if (!signature) {
+    return NextResponse.json({ error: "Missing signature" }, { status: 401 });
+  }
+
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(webhookSecret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sigBuffer = await crypto.subtle.sign("HMAC", key, encoder.encode(rawBody));
+  const computed = Array.from(new Uint8Array(sigBuffer))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+
+  if (computed !== signature) {
+    return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+  }
+
+  let payload: { events?: unknown[] };
+  try {
+    payload = JSON.parse(rawBody);
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
   const events = payload.events ?? [];
 
   for (const event of events) {
+    const e = event as {
+      resource?: { resource_type?: string; gid?: string };
+      action?: string;
+      change?: { field?: string; new_value?: { name?: string; text_value?: string } };
+    };
+
     if (
-      event.resource?.resource_type !== "task" ||
-      event.action !== "changed" ||
-      event.change?.field !== "custom_fields"
+      e.resource?.resource_type !== "task" ||
+      e.action !== "changed" ||
+      e.change?.field !== "custom_fields"
     ) {
       continue;
     }
 
-    const taskGid = event.resource.gid;
+    const taskGid = e.resource.gid;
+    if (!taskGid) continue;
+
     const brief = await prisma.hiringBrief.findFirst({
       where: { asanaTaskId: taskGid },
     });
 
     if (!brief) continue;
 
-    // The change contains new_value — we look for the approval status field GID
-    const newValue = event.change?.new_value;
+    const newValue = e.change?.new_value;
     if (!newValue) continue;
 
-    // Asana custom field changes come back as enum option names
-    const statusName = newValue?.name ?? newValue?.text_value;
+    const statusName = newValue.name ?? newValue.text_value;
+    if (!statusName) continue;
+
     const mapped = APPROVAL_STATUS_MAP[statusName];
 
     if (mapped && mapped !== brief.approvalStatus) {

@@ -1,6 +1,6 @@
 import { authOptions } from "@/lib/auth/config";
 import { updateApprovalStatus } from "@/lib/integrations/asana";
-import { requireRole } from "@/lib/auth/roles";
+import { requireRole, AuthError } from "@/lib/auth/roles";
 import { prisma } from "@/lib/utils/prisma";
 import { ApprovalStatus } from "@prisma/client";
 import { getServerSession } from "next-auth";
@@ -20,9 +20,14 @@ export async function POST(
 
   try {
     requireRole(session, "APPROVER", "HR", "ADMIN");
-  } catch {
+  } catch (err) {
+    if (err instanceof AuthError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  const actorEmail = session!.user.email ?? session!.user.id;
 
   const { id } = await params;
   const body = await req.json();
@@ -36,27 +41,31 @@ export async function POST(
 
   const { action, note } = parsed.data;
 
-  // Update Asana
-  await updateApprovalStatus(
-    brief.asanaTaskId,
-    action === "APPROVED" ? "approved" : "rejected",
-    session!.user.name ?? session!.user.email
-  );
-
-  // Update local DB
+  // Update DB first (source of truth), then sync Asana best-effort
   const updated = await prisma.hiringBrief.update({
     where: { id },
     data: {
       approvalStatus: action as ApprovalStatus,
-      approverName: session!.user.name ?? session!.user.email,
+      approverName: session!.user.name ?? actorEmail,
       approvedAt: new Date(),
       approvalNote: note,
     },
   });
 
+  // Sync Asana — log failure but don't block the response
+  try {
+    await updateApprovalStatus(
+      brief.asanaTaskId,
+      action === "APPROVED" ? "approved" : "rejected",
+      session!.user.name ?? actorEmail
+    );
+  } catch (err) {
+    console.error("Asana sync failed after approval — DB updated, Asana out of sync:", err);
+  }
+
   await prisma.auditEvent.create({
     data: {
-      actorEmail: session!.user.email,
+      actorEmail,
       eventType: action === "APPROVED" ? "BRIEF_APPROVED" : "BRIEF_REJECTED",
       entityId: id,
       entityType: "HiringBrief",

@@ -80,7 +80,7 @@ export interface BriefFieldValues {
   roleTitle:        string;
   department:       string;
   hiringManager:    string;
-  employmentType:   "Full Time" | "Part Time";
+  employmentType:   string;
   roleType:         "Existing Role" | "New Role";
   salaryRangeMin?:  number;
   salaryRangeMax?:  number;
@@ -96,9 +96,9 @@ export async function createBriefTask(briefId: string, fields: BriefFieldValues)
     [FIELD_GIDS.roleTitle]:       fields.roleTitle,
     [FIELD_GIDS.department]:      fields.department,
     [FIELD_GIDS.hiringManager]:   fields.hiringManager,
-    [FIELD_GIDS.employmentType]:  fields.employmentType === "Full Time"
-      ? ENUM_OPTIONS.employmentType.fullTime
-      : ENUM_OPTIONS.employmentType.partTime,
+    [FIELD_GIDS.employmentType]: fields.employmentType === "Part-time" || fields.employmentType === "Part Time"
+      ? ENUM_OPTIONS.employmentType.partTime
+      : ENUM_OPTIONS.employmentType.fullTime,
     [FIELD_GIDS.roleType]:        fields.roleType === "Existing Role"
       ? ENUM_OPTIONS.roleType.existingRole
       : ENUM_OPTIONS.roleType.newRole,

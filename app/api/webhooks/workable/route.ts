@@ -13,7 +13,12 @@ export async function POST(req: NextRequest) {
 
   const rawBody = await req.text();
 
-  const payload: WorkableWebhookPayload = JSON.parse(rawBody);
+  let payload: WorkableWebhookPayload;
+  try {
+    payload = JSON.parse(rawBody);
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
 
   if (payload.event_type !== "candidate_created") {
     return NextResponse.json({ received: true });
@@ -51,59 +56,64 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ received: true });
   }
 
-  // Run AI vetting
-  const prompt = buildVetPrompt(
-    candidate,
-    brief.roleTitle,
-    brief.hardSkills,
-    brief.softSkills,
-    brief.roleSummary ?? undefined
-  );
-
-  const raw = await generateText(RESUME_VET_SYSTEM_PROMPT, prompt);
-
-  let vetResult: {
-    status: string;
-    score: number;
-    summary: string;
-    suggestedInterviewQuestions: string[];
-  };
-
+  // Run AI vetting — wrapped so Workable doesn't retry on transient AI failures
   try {
-    const cleaned = raw.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim();
-    vetResult = JSON.parse(cleaned);
-  } catch {
-    console.error("Failed to parse AI vet result for candidate", candidate.id, raw);
-    return NextResponse.json({ received: true });
+    const prompt = buildVetPrompt(
+      candidate,
+      brief.roleTitle,
+      brief.hardSkills,
+      brief.softSkills,
+      brief.roleSummary ?? undefined
+    );
+
+    const raw = await generateText(RESUME_VET_SYSTEM_PROMPT, prompt);
+
+    let vetResult: {
+      status: string;
+      score: number;
+      summary: string;
+      suggestedInterviewQuestions: string[];
+    };
+
+    try {
+      const cleaned = raw.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim();
+      vetResult = JSON.parse(cleaned);
+    } catch {
+      console.error("Failed to parse AI vet result for candidate", candidate.id, raw);
+      return NextResponse.json({ received: true });
+    }
+
+    // Update candidate cache with vet result
+    await prisma.candidateCache.update({
+      where: { id: cached.id },
+      data: {
+        aiVetScore: vetResult.score,
+        aiVetStatus: vetResult.status,
+        aiVetSummary: vetResult.summary,
+        aiVetQuestions: vetResult.suggestedInterviewQuestions,
+        aiVetRunAt: new Date(),
+        briefId: brief.id,
+      },
+    });
+
+    // Write vet result back to Workable as a HR-only note
+    const noteBody = `[AI Vet — HR Only]\nStatus: ${vetResult.status}\nScore: ${vetResult.score}/100\n\n${vetResult.summary}\n\nSuggested interview questions:\n${vetResult.suggestedInterviewQuestions.map((q, i) => `${i + 1}. ${q}`).join("\n")}`;
+
+    await addCandidateNote(candidate.id, noteBody);
+
+    await prisma.auditEvent.create({
+      data: {
+        actorEmail: "ai-vet-agent",
+        eventType: "AI_VET_RUN",
+        entityId: cached.id,
+        entityType: "CandidateCache",
+        metadata: { score: vetResult.score, status: vetResult.status },
+      },
+    });
+  } catch (err) {
+    console.error("AI vet pipeline failed for candidate", candidate.id, err);
+    // Return 200 to prevent Workable retry storm — vet can be re-run manually
   }
-
-  // Update candidate cache with vet result
-  await prisma.candidateCache.update({
-    where: { id: cached.id },
-    data: {
-      aiVetScore: vetResult.score,
-      aiVetStatus: vetResult.status,
-      aiVetSummary: vetResult.summary,
-      aiVetQuestions: vetResult.suggestedInterviewQuestions,
-      aiVetRunAt: new Date(),
-      briefId: brief.id,
-    },
-  });
-
-  // Write vet result back to Workable as a HR-only note
-  const noteBody = `[AI Vet — HR Only]\nStatus: ${vetResult.status}\nScore: ${vetResult.score}/100\n\n${vetResult.summary}\n\nSuggested interview questions:\n${vetResult.suggestedInterviewQuestions.map((q, i) => `${i + 1}. ${q}`).join("\n")}`;
-
-  await addCandidateNote(candidate.id, noteBody);
-
-  await prisma.auditEvent.create({
-    data: {
-      actorEmail: "ai-vet-agent",
-      eventType: "AI_VET_RUN",
-      entityId: cached.id,
-      entityType: "CandidateCache",
-      metadata: { score: vetResult.score, status: vetResult.status },
-    },
-  });
 
   return NextResponse.json({ received: true });
 }
