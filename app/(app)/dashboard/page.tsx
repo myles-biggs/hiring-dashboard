@@ -1,5 +1,6 @@
 import { authOptions } from "@/lib/auth/config";
 import { prisma } from "@/lib/utils/prisma";
+import { getJobs, getCandidatesForJob } from "@/lib/integrations/workable";
 import { getServerSession } from "next-auth";
 import Link from "next/link";
 import { ApprovalBadge } from "@/components/brief/ApprovalBadge";
@@ -9,11 +10,44 @@ export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
   const isHR = session?.user.role === "HR" || session?.user.role === "ADMIN";
 
-  const briefs = await prisma.hiringBrief.findMany({
-    where: isHR ? {} : { hiringManagerEmail: session?.user.email },
-    orderBy: { createdAt: "desc" },
-    take: 10,
-  });
+  const [briefs, allBriefs] = await Promise.all([
+    prisma.hiringBrief.findMany({
+      where: isHR ? {} : { hiringManagerEmail: session?.user.email },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    }),
+    isHR
+      ? prisma.hiringBrief.findMany({ select: { approvalStatus: true } })
+      : prisma.hiringBrief.findMany({
+          where: { hiringManagerEmail: session?.user.email },
+          select: { approvalStatus: true },
+        }),
+  ]);
+
+  // Workable live stats — best-effort
+  let activePostings = 0;
+  let totalCandidates = 0;
+  let candidatesThisWeek = 0;
+  try {
+    const jobs = await getJobs();
+    activePostings = jobs.length;
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const candidateCounts = await Promise.all(
+      jobs.map((j) => getCandidatesForJob(j.shortcode).catch(() => []))
+    );
+    for (const candidates of candidateCounts) {
+      totalCandidates += candidates.filter((c) => !c.disqualified).length;
+      candidatesThisWeek += candidates.filter(
+        (c) => !c.disqualified && new Date(c.created_at) > weekAgo
+      ).length;
+    }
+  } catch {
+    // Workable unavailable — show what we have
+  }
+
+  const pendingApprovals = allBriefs.filter((b) => b.approvalStatus === "PENDING").length;
+  const approvedBriefs = allBriefs.filter((b) => b.approvalStatus === "APPROVED").length;
+  const totalBriefs = allBriefs.length;
 
   return (
     <div>
@@ -30,6 +64,23 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+        <StatCard label="Total briefs" value={totalBriefs} />
+        <StatCard label="Pending approval" value={pendingApprovals} highlight={pendingApprovals > 0} />
+        <StatCard label="Approved" value={approvedBriefs} />
+        <StatCard label="Live postings" value={activePostings} href="/postings" />
+        <StatCard label="Active candidates" value={totalCandidates} sub={candidatesThisWeek > 0 ? `+${candidatesThisWeek} this week` : undefined} href="/postings" />
+      </div>
+
+      {/* Recent briefs */}
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-gray-700">Recent briefs</h2>
+        <Link href="/briefs" className="text-xs text-gray-500 hover:text-gray-700">
+          View all →
+        </Link>
+      </div>
+
       {briefs.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
           <p className="text-gray-500 text-sm">No hiring briefs yet.</p>
@@ -41,7 +92,7 @@ export default async function DashboardPage() {
           </Link>
         </div>
       ) : (
-        <div className="grid gap-4">
+        <div className="grid gap-3">
           {briefs.map((brief: HiringBrief) => (
             <Link
               key={brief.id}
@@ -66,4 +117,35 @@ export default async function DashboardPage() {
       )}
     </div>
   );
+}
+
+function StatCard({
+  label,
+  value,
+  sub,
+  highlight,
+  href,
+}: {
+  label: string;
+  value: number;
+  sub?: string;
+  highlight?: boolean;
+  href?: string;
+}) {
+  const content = (
+    <div
+      className={`bg-white rounded-xl border p-5 ${
+        highlight ? "border-amber-300 bg-amber-50" : "border-gray-200"
+      }`}
+    >
+      <p className="text-3xl font-bold text-gray-900">{value}</p>
+      <p className="text-xs text-gray-500 mt-1">{label}</p>
+      {sub && <p className="text-xs text-green-600 mt-0.5 font-medium">{sub}</p>}
+    </div>
+  );
+
+  if (href) {
+    return <Link href={href}>{content}</Link>;
+  }
+  return content;
 }
