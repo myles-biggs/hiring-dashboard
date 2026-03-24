@@ -91,7 +91,10 @@ export async function POST(req: NextRequest) {
       targetStartDate: updated.targetStartDate,
     });
   } catch (err) {
-    console.error("Slack notification failed — brief was saved successfully:", err);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("Slack notification failed:", msg);
+    // Temporary: surface in response for debugging
+    return NextResponse.json({ id: updated.id, slackError: msg }, { status: 201 });
   }
 
   return NextResponse.json({ id: updated.id }, { status: 201 });
