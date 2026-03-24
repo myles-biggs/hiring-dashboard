@@ -39,7 +39,7 @@ export async function POST(
   // Update Asana
   await updateApprovalStatus(
     brief.asanaTaskId,
-    action === "APPROVED" ? "Approved" : "Rejected",
+    action === "APPROVED" ? "approved" : "rejected",
     session!.user.name ?? session!.user.email
   );
 

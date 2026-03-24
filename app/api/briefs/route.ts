@@ -45,13 +45,13 @@ export async function POST(req: NextRequest) {
   const asanaTask = await createBriefTask(brief.id, {
     roleTitle: data.roleTitle,
     department: data.department,
-    hiringManagerEmail: data.hiringManagerEmail,
-    employmentType: data.employmentType,
+    hiringManager: data.hiringManagerEmail,
+    employmentType: data.employmentType as "Full Time" | "Part Time",
+    roleType: "New Role",
     salaryRangeMin: data.salaryRangeMin,
     salaryRangeMax: data.salaryRangeMax,
-    yearsExperience: data.yearsExperience,
-    reportingStructure: data.reportingStructure,
     targetStartDate: data.targetStartDate,
+    roleSummary: data.roleSummary,
   });
 
   // Update local record with real Asana task GID
