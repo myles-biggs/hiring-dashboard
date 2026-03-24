@@ -20,20 +20,24 @@ export function JDView({ brief }: { brief: HiringBrief }) {
     setError(null);
     setSuccess(null);
 
-    const res = await fetch(`/api/jd/${brief.id}`, { method: "POST" });
+    try {
+      const res = await fetch(`/api/jd/${brief.id}`, { method: "POST" });
 
-    if (!res.ok) {
-      const body = await res.json();
-      setError(body.error ?? "Generation failed. Please try again.");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error ?? "Generation failed. Please try again.");
+        return;
+      }
+
+      const data = await res.json();
+      setJdEnglish(data.jdEnglish ?? "");
+      setJdFrench(data.jdFrench ?? "");
+      setEditing(false);
+    } catch {
+      setError("Request timed out or failed. Please try again.");
+    } finally {
       setGenerating(false);
-      return;
     }
-
-    const data = await res.json();
-    setJdEnglish(data.jdEnglish ?? "");
-    setJdFrench(data.jdFrench ?? "");
-    setEditing(false);
-    setGenerating(false);
   }
 
   async function saveEdits() {

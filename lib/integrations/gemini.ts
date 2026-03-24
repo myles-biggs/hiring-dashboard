@@ -14,7 +14,7 @@ function getGeminiClient(): GoogleGenerativeAI {
 export async function generateText(
   systemPrompt: string,
   userMessage: string,
-  model = "gemini-1.5-pro"
+  model = "gemini-2.0-flash"
 ): Promise<string> {
   const client = getGeminiClient();
   const generativeModel = client.getGenerativeModel({

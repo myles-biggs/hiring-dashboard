@@ -1,17 +1,10 @@
-import { authOptions } from "@/lib/auth/config";
 import { prisma } from "@/lib/utils/prisma";
-import { getServerSession } from "next-auth";
 import Link from "next/link";
 import { ApprovalBadge } from "@/components/brief/ApprovalBadge";
 import { HiringBrief } from "@prisma/client";
 
 export default async function BriefsListPage() {
-  const session = await getServerSession(authOptions);
-  const isTalentAcquisition = session?.user.role === "TALENT_ACQUISITION" || session?.user.role === "ADMIN";
-  const isApprover = session?.user.isApprover ?? false;
-
   const briefs = await prisma.hiringBrief.findMany({
-    where: isTalentAcquisition || isApprover ? {} : { hiringManagerEmail: session?.user.email },
     orderBy: { createdAt: "desc" },
   });
 
@@ -19,14 +12,12 @@ export default async function BriefsListPage() {
     <div>
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-2xl font-semibold text-gray-900">Hiring briefs</h1>
-        {(!isApprover || isTalentAcquisition) && (
-          <Link
-            href="/briefs/new"
-            className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
-          >
-            New brief
-          </Link>
-        )}
+        <Link
+          href="/briefs/new"
+          className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
+        >
+          New brief
+        </Link>
       </div>
 
       {briefs.length === 0 ? (
