@@ -1,5 +1,5 @@
 import { authOptions } from "@/lib/auth/config";
-import { generateText } from "@/lib/integrations/anthropic";
+import { generateText } from "@/lib/integrations/gemini";
 import { JD_SYSTEM_PROMPT, buildJDPrompt } from "@/lib/prompts/jd-generator";
 import { requireRole } from "@/lib/auth/roles";
 import { prisma } from "@/lib/utils/prisma";
@@ -39,7 +39,7 @@ export async function POST(
     parsed = JSON.parse(cleaned);
   } catch {
     return NextResponse.json(
-      { error: "Failed to parse JD from Claude response", raw },
+      { error: "Failed to parse JD from AI response", raw },
       { status: 502 }
     );
   }

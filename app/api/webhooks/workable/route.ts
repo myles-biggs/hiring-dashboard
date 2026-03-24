@@ -1,4 +1,4 @@
-import { generateText } from "@/lib/integrations/anthropic";
+import { generateText } from "@/lib/integrations/gemini";
 import { addCandidateNote, verifyWebhookSignature } from "@/lib/integrations/workable";
 import { buildVetPrompt, RESUME_VET_SYSTEM_PROMPT } from "@/lib/prompts/resume-vet";
 import { prisma } from "@/lib/utils/prisma";
