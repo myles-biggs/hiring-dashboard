@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
@@ -78,18 +77,11 @@ model HiringBrief {
   employmentType       String
   salaryRangeMin       Int?
   salaryRangeMax       Int?
-  yearsExperience      String
-  reportingStructure   String
+  yearsExperience      Int?
   targetStartDate      DateTime?
   roleSummary          String?        @db.Text
-  jdUploadUrl          String?
-  aiExpectationsNeeded Boolean        @default(false)
-  bilingualPostNeeded  Boolean        @default(false)
-
-  hardSkills           String[]
-  hardSkillsFreeText   String?
-  softSkills           String[]
-  softSkillsFreeText   String?
+  hardSkills           String?        @db.Text
+  softSkills           String?        @db.Text
 
   approvalStatus       ApprovalStatus @default(PENDING)
   approverName         String?
