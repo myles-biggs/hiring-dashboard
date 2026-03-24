@@ -1,8 +1,8 @@
-import { Role } from "@prisma/client";
 import { Session } from "next-auth";
 import { NextResponse } from "next/server";
 
-export { Role };
+// Defined here to avoid importing @prisma/client in client components
+export type Role = "HR" | "HIRING_MANAGER" | "APPROVER" | "ADMIN";
 
 export function hasRole(session: Session, ...roles: Role[]): boolean {
   return roles.includes(session.user.role);

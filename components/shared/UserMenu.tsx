@@ -1,8 +1,7 @@
 "use client";
 
 import { signOut } from "next-auth/react";
-import { ROLE_LABELS } from "@/lib/auth/roles";
-import { Role } from "@prisma/client";
+import { ROLE_LABELS, Role } from "@/lib/auth/roles";
 
 interface Props {
   user: {
