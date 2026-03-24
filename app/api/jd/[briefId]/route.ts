@@ -16,7 +16,7 @@ export async function POST(
   const session = await getServerSession(authOptions);
 
   try {
-    requireRole(session, "HR", "HIRING_MANAGER", "ADMIN");
+    requireRole(session, "TALENT_ACQUISITION", "HIRING_MANAGER", "ADMIN");
   } catch (err) {
     if (err instanceof AuthError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
@@ -30,9 +30,9 @@ export async function POST(
   const brief = await prisma.hiringBrief.findUnique({ where: { id: briefId } });
   if (!brief) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const isHR = session!.user.role === "HR" || session!.user.role === "ADMIN";
+  const isTalentAcquisition = session!.user.role === "TALENT_ACQUISITION" || session!.user.role === "ADMIN";
   const isOwner = brief.hiringManagerEmail === session!.user.email;
-  if (!isHR && !isOwner) {
+  if (!isTalentAcquisition && !isOwner) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -94,7 +94,7 @@ export async function PUT(
   const session = await getServerSession(authOptions);
 
   try {
-    requireRole(session, "HR", "HIRING_MANAGER", "ADMIN");
+    requireRole(session, "TALENT_ACQUISITION", "HIRING_MANAGER", "ADMIN");
   } catch (err) {
     if (err instanceof AuthError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
@@ -106,9 +106,9 @@ export async function PUT(
   const brief = await prisma.hiringBrief.findUnique({ where: { id: briefId } });
   if (!brief) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const isHR = session!.user.role === "HR" || session!.user.role === "ADMIN";
+  const isTalentAcquisition = session!.user.role === "TALENT_ACQUISITION" || session!.user.role === "ADMIN";
   const isOwner = brief.hiringManagerEmail === session!.user.email;
-  if (!isHR && !isOwner) {
+  if (!isTalentAcquisition && !isOwner) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

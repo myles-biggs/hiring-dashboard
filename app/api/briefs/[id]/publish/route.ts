@@ -13,7 +13,7 @@ export async function POST(
   const session = await getServerSession(authOptions);
 
   try {
-    requireRole(session, "HR", "ADMIN");
+    requireRole(session, "TALENT_ACQUISITION", "ADMIN");
   } catch (err) {
     if (err instanceof AuthError) {
       return NextResponse.json({ error: err.message }, { status: err.status });

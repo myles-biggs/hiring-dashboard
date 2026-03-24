@@ -18,21 +18,20 @@ export const authOptions: NextAuthOptions = {
         session.user.id = user.id;
         const dbUser = await prisma.user.findUnique({
           where: { id: user.id },
-          select: { role: true },
+          select: { role: true, isApprover: true },
         });
         session.user.role = dbUser?.role ?? Role.HIRING_MANAGER;
+        session.user.isApprover = dbUser?.isApprover ?? false;
       }
       return session;
     },
     async signIn({ user }) {
       if (!user.email) return false;
 
-      const hrEmails = (process.env.HR_EMAILS ?? "")
+      const taEmails = (process.env.HR_EMAILS ?? "")
         .split(",")
         .map((e) => e.trim())
         .filter(Boolean);
-      const primaryApprover = process.env.APPROVER_PRIMARY_EMAIL ?? "";
-      const backupApprover = process.env.APPROVER_BACKUP_EMAIL ?? "";
 
       const adminEmails = (process.env.ADMIN_EMAILS ?? "")
         .split(",")
@@ -41,9 +40,7 @@ export const authOptions: NextAuthOptions = {
 
       let role: Role = Role.HIRING_MANAGER;
       if (adminEmails.includes(user.email)) role = Role.ADMIN;
-      else if (hrEmails.includes(user.email)) role = Role.HR;
-      else if ([primaryApprover, backupApprover].filter(Boolean).includes(user.email))
-        role = Role.APPROVER;
+      else if (taEmails.includes(user.email)) role = Role.TALENT_ACQUISITION;
 
       // Update only — never create. The Prisma adapter handles user creation.
       // On first sign-in the user doesn't exist yet so updateMany is a no-op.

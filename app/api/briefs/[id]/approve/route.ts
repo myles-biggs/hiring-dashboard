@@ -1,6 +1,6 @@
 import { authOptions } from "@/lib/auth/config";
 import { updateApprovalStatus } from "@/lib/integrations/asana";
-import { requireRole, AuthError } from "@/lib/auth/roles";
+import { requireApprover, AuthError } from "@/lib/auth/roles";
 import { prisma } from "@/lib/utils/prisma";
 import { ApprovalStatus } from "@prisma/client";
 import { getServerSession } from "next-auth";
@@ -19,7 +19,7 @@ export async function POST(
   const session = await getServerSession(authOptions);
 
   try {
-    requireRole(session, "APPROVER", "HR", "ADMIN");
+    requireApprover(session);
   } catch (err) {
     if (err instanceof AuthError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
@@ -47,6 +47,7 @@ export async function POST(
     data: {
       approvalStatus: action as ApprovalStatus,
       approverName: session!.user.name ?? actorEmail,
+      approverEmail: actorEmail,
       approvedAt: new Date(),
       approvalNote: note,
     },

@@ -15,11 +15,11 @@ export async function GET(
   const brief = await prisma.hiringBrief.findUnique({ where: { id } });
   if (!brief) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const isHR = session.user.role === "HR" || session.user.role === "ADMIN";
+  const isTalentAcquisition = session.user.role === "TALENT_ACQUISITION" || session.user.role === "ADMIN";
   const isOwner = brief.hiringManagerEmail === session.user.email;
-  const isApprover = session.user.role === "APPROVER";
+  const isApprover = session.user.isApprover ?? false;
 
-  if (!isHR && !isOwner && !isApprover) {
+  if (!isTalentAcquisition && !isOwner && !isApprover) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

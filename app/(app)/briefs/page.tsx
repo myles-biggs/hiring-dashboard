@@ -7,11 +7,11 @@ import { HiringBrief } from "@prisma/client";
 
 export default async function BriefsListPage() {
   const session = await getServerSession(authOptions);
-  const isHR = session?.user.role === "HR" || session?.user.role === "ADMIN";
-  const isApprover = session?.user.role === "APPROVER";
+  const isTalentAcquisition = session?.user.role === "TALENT_ACQUISITION" || session?.user.role === "ADMIN";
+  const isApprover = session?.user.isApprover ?? false;
 
   const briefs = await prisma.hiringBrief.findMany({
-    where: isHR || isApprover ? {} : { hiringManagerEmail: session?.user.email },
+    where: isTalentAcquisition || isApprover ? {} : { hiringManagerEmail: session?.user.email },
     orderBy: { createdAt: "desc" },
   });
 
@@ -19,7 +19,7 @@ export default async function BriefsListPage() {
     <div>
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-2xl font-semibold text-gray-900">Hiring briefs</h1>
-        {!isApprover && (
+        {(!isApprover || isTalentAcquisition) && (
           <Link
             href="/briefs/new"
             className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"

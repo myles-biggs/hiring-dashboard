@@ -2,18 +2,24 @@ import { Session } from "next-auth";
 import { NextResponse } from "next/server";
 
 // Defined here to avoid importing @prisma/client in client components
-export type Role = "HR" | "HIRING_MANAGER" | "APPROVER" | "ADMIN";
+export type Role = "TALENT_ACQUISITION" | "HIRING_MANAGER" | "ADMIN";
 
 export function hasRole(session: Session, ...roles: Role[]): boolean {
-  return roles.includes(session.user.role);
+  return roles.includes(session.user.role as Role);
 }
 
 export function requireRole(session: Session | null, ...roles: Role[]): void {
   if (!session) {
     throw new AuthError(401, "Unauthorized");
   }
-  if (!roles.includes(session.user.role)) {
+  if (!roles.includes(session.user.role as Role)) {
     throw new AuthError(403, "Forbidden");
+  }
+}
+
+export function requireApprover(session: Session | null): void {
+  if (!session?.user.isApprover && session?.user.role !== "ADMIN") {
+    throw new AuthError(403, "Approver permission required");
   }
 }
 
@@ -34,8 +40,7 @@ export function handleAuthError(err: unknown): NextResponse {
 }
 
 export const ROLE_LABELS: Record<Role, string> = {
-  HR: "HR / People Ops",
+  TALENT_ACQUISITION: "Talent Acquisition",
   HIRING_MANAGER: "Hiring Manager",
-  APPROVER: "Approver",
   ADMIN: "Admin",
 };

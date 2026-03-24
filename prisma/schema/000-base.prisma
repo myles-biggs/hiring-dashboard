@@ -15,6 +15,7 @@ model User {
   name          String?
   image         String?
   role          Role      @default(HIRING_MANAGER)
+  isApprover    Boolean   @default(false)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -23,9 +24,8 @@ model User {
 }
 
 enum Role {
-  HR
   HIRING_MANAGER
-  APPROVER
+  TALENT_ACQUISITION
   ADMIN
 }
 
@@ -88,6 +88,7 @@ model HiringBrief {
   approverName         String?
   approvedAt           DateTime?
   approvalNote         String?
+  approverEmail        String?
 
   jdEnglish            String?        @db.Text
   jdFrench             String?        @db.Text

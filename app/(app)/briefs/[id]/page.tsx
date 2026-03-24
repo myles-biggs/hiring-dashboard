@@ -17,10 +17,10 @@ export default async function BriefDetailPage({
 
   if (!brief) notFound();
 
-  const isHR = session?.user.role === "HR" || session?.user.role === "ADMIN";
-  const isApprover = session?.user.role === "APPROVER";
+  const isTalentAcquisition = session?.user.role === "TALENT_ACQUISITION" || session?.user.role === "ADMIN";
+  const isApprover = session?.user.isApprover ?? false;
 
-  const canApprove = isApprover || isHR;
+  const canApprove = isApprover || isTalentAcquisition;
   const canGenerateJD = brief.approvalStatus === "APPROVED";
 
   return (

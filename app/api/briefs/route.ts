@@ -104,10 +104,10 @@ export async function GET(req: NextRequest) {
   // searchParams reserved for future filtering (e.g. ?status=PENDING)
   void new URL(req.url).searchParams;
 
-  const isHR = session.user.role === "HR" || session.user.role === "ADMIN";
+  const isTalentAcquisition = session.user.role === "TALENT_ACQUISITION" || session.user.role === "ADMIN";
 
   const briefs = await prisma.hiringBrief.findMany({
-    where: isHR ? {} : { hiringManagerEmail: session.user.email },
+    where: isTalentAcquisition ? {} : { hiringManagerEmail: session.user.email },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
