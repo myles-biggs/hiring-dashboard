@@ -54,29 +54,10 @@ export async function addCandidateNote(
   });
 }
 
-export async function verifyWebhookSignature(
-  rawBody: string,
-  signature: string
-): Promise<boolean> {
-  const secret = process.env.WORKABLE_WEBHOOK_SECRET;
-  if (!secret) return false;
-
-  const encoder = new TextEncoder();
-  const keyData = encoder.encode(secret);
-  const messageData = encoder.encode(rawBody);
-
-  const key = await crypto.subtle.importKey(
-    "raw",
-    keyData,
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-
-  const sigBuffer = await crypto.subtle.sign("HMAC", key, messageData);
-  const computed = Array.from(new Uint8Array(sigBuffer))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-
-  return computed === signature;
+// Workable does not sign webhook payloads. We verify via a shared token
+// embedded in the webhook URL query string (?token=...).
+export function verifyWebhookToken(token: string | null): boolean {
+  const expected = process.env.WORKABLE_WEBHOOK_SECRET;
+  if (!expected || !token) return false;
+  return token === expected;
 }

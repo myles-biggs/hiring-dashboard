@@ -1,18 +1,17 @@
 import { generateText } from "@/lib/integrations/gemini";
-import { addCandidateNote, verifyWebhookSignature } from "@/lib/integrations/workable";
+import { addCandidateNote, verifyWebhookToken } from "@/lib/integrations/workable";
 import { buildVetPrompt, RESUME_VET_SYSTEM_PROMPT } from "@/lib/prompts/resume-vet";
 import { prisma } from "@/lib/utils/prisma";
 import { WorkableWebhookPayload } from "@/types/workable";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
-  const rawBody = await req.text();
-  const signature = req.headers.get("x-workable-signature") ?? "";
-
-  const valid = await verifyWebhookSignature(rawBody, signature);
-  if (!valid) {
-    return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+  const token = req.nextUrl.searchParams.get("token");
+  if (!verifyWebhookToken(token)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const rawBody = await req.text();
 
   const payload: WorkableWebhookPayload = JSON.parse(rawBody);
 
