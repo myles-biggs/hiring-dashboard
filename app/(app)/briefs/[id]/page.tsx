@@ -18,13 +18,10 @@ export default async function BriefDetailPage({
   if (!brief) notFound();
 
   const isHR = session?.user.role === "HR" || session?.user.role === "ADMIN";
-  const isOwner = brief.hiringManagerEmail === session?.user.email;
   const isApprover = session?.user.role === "APPROVER";
 
-  if (!isHR && !isOwner && !isApprover) notFound();
-
   const canApprove = isApprover || isHR;
-  const canGenerateJD = (isHR || isOwner) && brief.approvalStatus === "APPROVED";
+  const canGenerateJD = brief.approvalStatus === "APPROVED";
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -43,7 +40,7 @@ export default async function BriefDetailPage({
               href={`/briefs/${brief.id}/jd`}
               className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
             >
-              {brief.jdGeneratedAt ? "View JD" : "Generate JD"}
+              {brief.jdGeneratedAt ? "View job post" : "Generate job post"}
             </Link>
           )}
         </div>

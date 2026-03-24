@@ -1,27 +1,17 @@
-import { authOptions } from "@/lib/auth/config";
 import { prisma } from "@/lib/utils/prisma";
 import { getJobs, getCandidatesForJob } from "@/lib/integrations/workable";
-import { getServerSession } from "next-auth";
 import Link from "next/link";
 import { ApprovalBadge } from "@/components/brief/ApprovalBadge";
 import { HiringBrief } from "@prisma/client";
 
 export default async function DashboardPage() {
-  const session = await getServerSession(authOptions);
-  const isHR = session?.user.role === "HR" || session?.user.role === "ADMIN";
 
   const [briefs, allBriefs] = await Promise.all([
     prisma.hiringBrief.findMany({
-      where: isHR ? {} : { hiringManagerEmail: session?.user.email },
       orderBy: { createdAt: "desc" },
       take: 10,
     }),
-    isHR
-      ? prisma.hiringBrief.findMany({ select: { approvalStatus: true } })
-      : prisma.hiringBrief.findMany({
-          where: { hiringManagerEmail: session?.user.email },
-          select: { approvalStatus: true },
-        }),
+    prisma.hiringBrief.findMany({ select: { approvalStatus: true } }),
   ]);
 
   // Workable live stats — best-effort

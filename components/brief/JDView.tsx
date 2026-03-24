@@ -86,7 +86,7 @@ export function JDView({ brief }: { brief: HiringBrief }) {
     return (
       <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
         <p className="text-gray-500 text-sm mb-6">
-          No JD generated yet. Click below to generate using the approved brief data.
+          No job post generated yet. Click below to generate using the approved brief data.
         </p>
         {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
         <button
@@ -94,7 +94,7 @@ export function JDView({ brief }: { brief: HiringBrief }) {
           disabled={generating}
           className="px-6 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
         >
-          {generating ? "Generating..." : "Generate JD"}
+          {generating ? "Generating..." : "Generate job post"}
         </button>
       </div>
     );

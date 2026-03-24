@@ -1,3 +1,5 @@
+export const maxDuration = 60;
+
 import { authOptions } from "@/lib/auth/config";
 import { generateText } from "@/lib/integrations/gemini";
 import { JD_SYSTEM_PROMPT, buildJDPrompt } from "@/lib/prompts/jd-generator";
