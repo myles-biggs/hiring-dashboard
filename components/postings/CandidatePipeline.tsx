@@ -529,38 +529,52 @@ export function CandidatePipeline({
     setVetAllSummary(null);
     setError(null);
 
-    const res = await fetch(`/api/postings/${jobShortcode}/vet-all`, { method: "POST" });
-    const body = await res.json();
-
-    setVettingAll(false);
-
-    if (!res.ok) {
-      setError(body.error ?? "Bulk vetting failed.");
+    // Fetch the list of unvetted candidates
+    const listRes = await fetch(`/api/postings/${jobShortcode}/vet-all`);
+    if (!listRes.ok) {
+      setError("Failed to load candidate list.");
+      setVettingAll(false);
       return;
     }
 
-    // Merge results into vetMap
-    if (body.results?.length > 0) {
-      setVetMap((prev) => {
-        const next = { ...prev };
-        for (const r of body.results) {
-          next[r.candidateId] = {
-            ...next[r.candidateId],
-            workableCandidateId: r.candidateId,
-            aiVetScore: r.score,
-            aiVetStatus: r.score >= 60 ? "Qualified" : "Unqualified",
-            aiVetSummary: next[r.candidateId]?.aiVetSummary ?? null,
-            aiVetQuestions: next[r.candidateId]?.aiVetQuestions ?? [],
-          };
-        }
-        return next;
-      });
+    const { unvetted } = (await listRes.json()) as {
+      unvetted: { id: string; name: string }[];
+      total: number;
+    };
+
+    if (unvetted.length === 0) {
+      setVetAllSummary("All candidates already scored");
+      setVettingAll(false);
+      return;
     }
 
+    let vetted = 0;
+    for (const candidate of unvetted) {
+      setVetAllSummary(`Vetting ${vetted + 1} of ${unvetted.length}: ${candidate.name}…`);
+      try {
+        const res = await fetch(
+          `/api/postings/${jobShortcode}/candidates/${candidate.id}/vet`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ briefId }),
+          }
+        );
+        if (res.ok) {
+          const body = await res.json();
+          setVetMap((prev) => ({ ...prev, [candidate.id]: body }));
+          vetted++;
+        }
+      } catch {
+        // Skip failed — continue with next
+      }
+    }
+
+    setVettingAll(false);
     setVetAllSummary(
-      body.vetted > 0
-        ? `${body.vetted} candidate${body.vetted !== 1 ? "s" : ""} vetted${body.skipped > 0 ? `, ${body.skipped} already scored` : ""}`
-        : `All candidates already scored`
+      vetted > 0
+        ? `${vetted} candidate${vetted !== 1 ? "s" : ""} vetted`
+        : "No candidates could be vetted"
     );
   }
 
@@ -689,9 +703,9 @@ export function CandidatePipeline({
           <button
             onClick={runVetAll}
             disabled={vettingAll}
-            className="text-xs px-3 py-1.5 bg-gray-900 text-white rounded-full hover:bg-gray-800 disabled:opacity-50 transition-colors"
+            className="text-xs px-3 py-1.5 bg-gray-900 text-white rounded-full hover:bg-gray-800 disabled:opacity-50 transition-colors whitespace-nowrap"
           >
-            {vettingAll ? "Vetting all…" : "Vet all unvetted"}
+            {vettingAll ? "Running…" : "Vet all unvetted"}
           </button>
         </div>
       </div>
