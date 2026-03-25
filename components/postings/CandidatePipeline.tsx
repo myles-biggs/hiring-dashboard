@@ -431,6 +431,8 @@ export function CandidatePipeline({
   const [error, setError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<"applied" | "score">("score");
   const [filterStatus, setFilterStatus] = useState<"all" | "Qualified" | "Unqualified">("all");
+  const [vettingAll, setVettingAll] = useState(false);
+  const [vetAllSummary, setVetAllSummary] = useState<string | null>(null);
   const [closePrompt, setClosePrompt] = useState<{ candidateId: string; stageSlug: string } | null>(null);
   const [closing, setClosing] = useState(false);
   const [jobClosed, setJobClosed] = useState(false);
@@ -522,6 +524,46 @@ export function CandidatePipeline({
     setClosePrompt(null);
   }
 
+  async function runVetAll() {
+    setVettingAll(true);
+    setVetAllSummary(null);
+    setError(null);
+
+    const res = await fetch(`/api/postings/${jobShortcode}/vet-all`, { method: "POST" });
+    const body = await res.json();
+
+    setVettingAll(false);
+
+    if (!res.ok) {
+      setError(body.error ?? "Bulk vetting failed.");
+      return;
+    }
+
+    // Merge results into vetMap
+    if (body.results?.length > 0) {
+      setVetMap((prev) => {
+        const next = { ...prev };
+        for (const r of body.results) {
+          next[r.candidateId] = {
+            ...next[r.candidateId],
+            workableCandidateId: r.candidateId,
+            aiVetScore: r.score,
+            aiVetStatus: r.score >= 60 ? "Qualified" : "Unqualified",
+            aiVetSummary: next[r.candidateId]?.aiVetSummary ?? null,
+            aiVetQuestions: next[r.candidateId]?.aiVetQuestions ?? [],
+          };
+        }
+        return next;
+      });
+    }
+
+    setVetAllSummary(
+      body.vetted > 0
+        ? `${body.vetted} candidate${body.vetted !== 1 ? "s" : ""} vetted${body.skipped > 0 ? `, ${body.skipped} already scored` : ""}`
+        : `All candidates already scored`
+    );
+  }
+
   async function runVet(candidate: WorkableCandidate) {
     setVettingId(candidate.id);
     setError(null);
@@ -609,7 +651,8 @@ export function CandidatePipeline({
         </div>
       )}
 
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-500">Sort:</span>
           <button
@@ -636,6 +679,20 @@ export function CandidatePipeline({
               {f === "all" ? "All" : f}
             </button>
           ))}
+        </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {vetAllSummary && (
+            <span className="text-xs text-green-700 font-medium">{vetAllSummary}</span>
+          )}
+          <button
+            onClick={runVetAll}
+            disabled={vettingAll}
+            className="text-xs px-3 py-1.5 bg-gray-900 text-white rounded-full hover:bg-gray-800 disabled:opacity-50 transition-colors"
+          >
+            {vettingAll ? "Vetting all…" : "Vet all unvetted"}
+          </button>
         </div>
       </div>
 
