@@ -1,5 +1,5 @@
 import { authOptions } from "@/lib/auth/config";
-import { getCandidate } from "@/lib/integrations/workable";
+import { getCandidate, getJob } from "@/lib/integrations/workable";
 import { generateJson } from "@/lib/integrations/gemini";
 import { RESUME_VET_SYSTEM_PROMPT, buildVetPrompt } from "@/lib/prompts/resume-vet";
 import { requireRole, AuthError } from "@/lib/auth/roles";
@@ -49,13 +49,27 @@ export async function POST(
       })
     : null;
 
+  // When no brief is linked, fetch the live job from Workable to use as role context
+  let jobDescription: string | undefined;
+  if (!brief) {
+    try {
+      const job = await getJob(shortcode);
+      jobDescription = job.description
+        ? job.description.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim().slice(0, 1000)
+        : undefined;
+    } catch {
+      // Non-fatal — vet will proceed without role description
+    }
+  }
+
   const roleTitle = brief?.roleTitle ?? candidate.job?.title ?? shortcode;
+  const roleSummary = brief?.roleSummary ?? jobDescription;
   const prompt = buildVetPrompt(
     candidate,
     roleTitle,
     brief?.hardSkills ?? null,
     brief?.softSkills ?? null,
-    brief?.roleSummary ?? undefined
+    roleSummary
   );
 
   let vetResult: {

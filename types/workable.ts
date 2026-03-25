@@ -46,6 +46,7 @@ export interface WorkableJob {
   location: WorkableLocation;
   created_at: string;
   published_on?: string;
+  description?: string;
 }
 
 export interface WorkableLocation {

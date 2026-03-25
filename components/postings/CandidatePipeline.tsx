@@ -429,6 +429,8 @@ export function CandidatePipeline({
   const [movingId, setMovingId] = useState<string | null>(null);
   const [vettingId, setVettingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<"applied" | "score">("score");
+  const [filterStatus, setFilterStatus] = useState<"all" | "Qualified" | "Unqualified">("all");
   const [closePrompt, setClosePrompt] = useState<{ candidateId: string; stageSlug: string } | null>(null);
   const [closing, setClosing] = useState(false);
   const [jobClosed, setJobClosed] = useState(false);
@@ -440,7 +442,24 @@ export function CandidatePipeline({
 
   const byStage: Record<string, WorkableCandidate[]> = {};
   for (const stage of activeStages) {
-    byStage[stage.slug] = activeCandidates.filter((c) => c.stage.name === stage.name);
+    let stageCandidates = activeCandidates.filter((c) => c.stage.name === stage.name);
+
+    if (filterStatus !== "all") {
+      stageCandidates = stageCandidates.filter(
+        (c) => vetMap[c.id]?.aiVetStatus === filterStatus
+      );
+    }
+
+    stageCandidates = stageCandidates.sort((a, b) => {
+      if (sortBy === "score") {
+        const scoreA = vetMap[a.id]?.aiVetScore ?? -1;
+        const scoreB = vetMap[b.id]?.aiVetScore ?? -1;
+        return scoreB - scoreA;
+      }
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+
+    byStage[stage.slug] = stageCandidates;
   }
 
   async function moveCandidate(candidateId: string, targetStageSlug: string) {
@@ -504,10 +523,6 @@ export function CandidatePipeline({
   }
 
   async function runVet(candidate: WorkableCandidate) {
-    if (!jdEnglish) {
-      setError("No JD available. Generate a JD for this role first.");
-      return;
-    }
     setVettingId(candidate.id);
     setError(null);
 
@@ -594,6 +609,36 @@ export function CandidatePipeline({
         </div>
       )}
 
+      <div className="flex items-center gap-3 mb-4">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500">Sort:</span>
+          <button
+            onClick={() => setSortBy("score")}
+            className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${sortBy === "score" ? "bg-gray-900 text-white border-gray-900" : "border-gray-300 text-gray-600 hover:bg-gray-50"}`}
+          >
+            AI Score
+          </button>
+          <button
+            onClick={() => setSortBy("applied")}
+            className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${sortBy === "applied" ? "bg-gray-900 text-white border-gray-900" : "border-gray-300 text-gray-600 hover:bg-gray-50"}`}
+          >
+            Applied date
+          </button>
+        </div>
+        <div className="flex items-center gap-2 ml-4">
+          <span className="text-xs text-gray-500">Filter:</span>
+          {(["all", "Qualified", "Unqualified"] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilterStatus(f)}
+              className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${filterStatus === f ? "bg-gray-900 text-white border-gray-900" : "border-gray-300 text-gray-600 hover:bg-gray-50"}`}
+            >
+              {f === "all" ? "All" : f}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {activeStages.map((stage) => {
         const stageCandidates = byStage[stage.slug] ?? [];
         return (
@@ -632,13 +677,16 @@ export function CandidatePipeline({
                           {candidate.headline && (
                             <p className="text-xs text-gray-500 mt-0.5 truncate">{candidate.headline}</p>
                           )}
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            Applied {new Date(candidate.created_at).toLocaleDateString("en-CA")}
+                          </p>
                         </div>
 
                         <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
                           <button
                             onClick={() => runVet(candidate)}
-                            disabled={vettingId === candidate.id || !jdEnglish}
-                            title={!jdEnglish ? "No JD available" : "Run AI vet"}
+                            disabled={vettingId === candidate.id}
+                            title="Run AI vet"
                             className="text-xs px-2.5 py-1.5 border border-gray-300 rounded-md text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
                           >
                             {vettingId === candidate.id ? "Vetting…" : vet ? "Re-vet" : "AI Vet"}

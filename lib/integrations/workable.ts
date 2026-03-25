@@ -66,6 +66,11 @@ export async function getJobs(): Promise<WorkableJob[]> {
   return data.jobs;
 }
 
+export async function getJob(shortcode: string): Promise<WorkableJob> {
+  const data = await workableFetch<{ job: WorkableJob }>(`/jobs/${shortcode}`);
+  return data.job;
+}
+
 export async function getCandidatesForJob(jobShortcode: string): Promise<WorkableCandidate[]> {
   const data = await workableFetch<{ candidates: WorkableCandidate[] }>(
     `/jobs/${jobShortcode}/candidates`

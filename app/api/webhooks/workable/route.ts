@@ -1,5 +1,5 @@
 import { generateText } from "@/lib/integrations/gemini";
-import { addCandidateNote, verifyWebhookToken } from "@/lib/integrations/workable";
+import { addCandidateNote, getJob, verifyWebhookToken } from "@/lib/integrations/workable";
 import { buildVetPrompt, RESUME_VET_SYSTEM_PROMPT } from "@/lib/prompts/resume-vet";
 import { prisma } from "@/lib/utils/prisma";
 import { WorkableWebhookPayload } from "@/types/workable";
@@ -46,24 +46,35 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // Find the matching brief for this job
+  // Find the matching brief for this job (optional — vet runs with or without one)
   const brief = await prisma.hiringBrief.findFirst({
     where: { workableJobId: candidate.job.id },
   });
 
+  // When no brief is linked, fetch the live job description as role context
+  let jobRoleSummary: string | undefined;
   if (!brief) {
-    // No brief linked — still log the candidate, skip AI vet
-    return NextResponse.json({ received: true });
+    try {
+      const job = await getJob(candidate.job.shortcode);
+      jobRoleSummary = job.description
+        ? job.description.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim().slice(0, 1000)
+        : undefined;
+    } catch {
+      // Non-fatal — vet will proceed without role description
+    }
   }
+
+  const roleTitle = brief?.roleTitle ?? candidate.job.title;
+  const roleSummary = brief?.roleSummary ?? jobRoleSummary;
 
   // Run AI vetting — wrapped so Workable doesn't retry on transient AI failures
   try {
     const prompt = buildVetPrompt(
       candidate,
-      brief.roleTitle,
-      brief.hardSkills,
-      brief.softSkills,
-      brief.roleSummary ?? undefined
+      roleTitle,
+      brief?.hardSkills ?? null,
+      brief?.softSkills ?? null,
+      roleSummary
     );
 
     const raw = await generateText(RESUME_VET_SYSTEM_PROMPT, prompt);
@@ -92,7 +103,7 @@ export async function POST(req: NextRequest) {
         aiVetSummary: vetResult.summary,
         aiVetQuestions: vetResult.suggestedInterviewQuestions,
         aiVetRunAt: new Date(),
-        briefId: brief.id,
+        briefId: brief?.id ?? null,
       },
     });
 
