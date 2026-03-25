@@ -72,10 +72,16 @@ export async function getJob(shortcode: string): Promise<WorkableJob> {
 }
 
 export async function getCandidatesForJob(jobShortcode: string): Promise<WorkableCandidate[]> {
-  const data = await workableFetch<{ candidates: WorkableCandidate[] }>(
+  const data = await workableFetch<{ candidates: (Omit<WorkableCandidate, "stage"> & { stage: WorkableCandidate["stage"] | string })[] }>(
     `/jobs/${jobShortcode}/candidates`
   );
-  return data.candidates;
+  // Workable list endpoint returns stage as a plain string; normalize to object
+  return data.candidates.map((c) => ({
+    ...c,
+    stage: typeof c.stage === "string"
+      ? { name: c.stage, kind: "applied", position: 0 }
+      : c.stage,
+  })) as WorkableCandidate[];
 }
 
 export async function getCandidate(candidateId: string): Promise<WorkableCandidate> {
