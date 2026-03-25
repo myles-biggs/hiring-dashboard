@@ -549,6 +549,7 @@ export function CandidatePipeline({
     }
 
     let vetted = 0;
+    let lastError = "";
     for (const candidate of unvetted) {
       setVetAllSummary(`Vetting ${vetted + 1} of ${unvetted.length}: ${candidate.name}…`);
       try {
@@ -560,22 +561,24 @@ export function CandidatePipeline({
             body: JSON.stringify({ briefId }),
           }
         );
+        const body = await res.json();
         if (res.ok) {
-          const body = await res.json();
           setVetMap((prev) => ({ ...prev, [candidate.id]: body }));
           vetted++;
+        } else {
+          lastError = body.error ?? `HTTP ${res.status}`;
         }
-      } catch {
-        // Skip failed — continue with next
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : "Unknown error";
       }
     }
 
     setVettingAll(false);
-    setVetAllSummary(
-      vetted > 0
-        ? `${vetted} candidate${vetted !== 1 ? "s" : ""} vetted`
-        : "No candidates could be vetted"
-    );
+    if (vetted > 0) {
+      setVetAllSummary(`${vetted} candidate${vetted !== 1 ? "s" : ""} vetted`);
+    } else {
+      setVetAllSummary(`No candidates could be vetted${lastError ? `: ${lastError}` : ""}`);
+    }
   }
 
   async function runVet(candidate: WorkableCandidate) {
