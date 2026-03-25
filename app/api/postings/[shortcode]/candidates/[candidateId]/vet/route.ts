@@ -94,6 +94,10 @@ export async function POST(
     return NextResponse.json({ error: `AI vetting failed: ${message}` }, { status: 502 });
   }
 
+  const stageName = typeof candidate.stage === "string"
+    ? candidate.stage
+    : (candidate.stage as { name?: string })?.name ?? "Applied";
+
   // Upsert into CandidateCache
   const cached = await prisma.candidateCache.upsert({
     where: { workableCandidateId: candidateId },
@@ -102,10 +106,10 @@ export async function POST(
       workableJobId: shortcode,
       name: candidate.name,
       email: candidate.email,
-      currentStage: candidate.stage.name,
+      currentStage: stageName,
       appliedAt: new Date(candidate.created_at),
-      resumeUrl: candidate.resume_url,
-      linkedinUrl: candidate.linkedin_url,
+      resumeUrl: candidate.resume_url ?? null,
+      linkedinUrl: candidate.linkedin_url ?? null,
       aiVetScore: vetResult.score,
       aiVetStatus: vetResult.status,
       aiVetSummary: vetResult.summary,
@@ -119,7 +123,7 @@ export async function POST(
       aiVetSummary: vetResult.summary,
       aiVetQuestions: vetResult.suggestedInterviewQuestions,
       aiVetRunAt: new Date(),
-      currentStage: candidate.stage.name,
+      currentStage: stageName,
     },
   });
 
