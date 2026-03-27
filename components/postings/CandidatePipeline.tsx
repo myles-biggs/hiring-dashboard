@@ -3,6 +3,8 @@
 import { WorkableStageOption } from "@/lib/integrations/workable";
 import { WorkableCandidate, WorkableEmailTemplate } from "@/types/workable";
 import { useEffect, useState } from "react";
+import { EvaluationForm, CandidateEvaluation } from "@/components/evaluations/EvaluationForm";
+import { EvaluationHistory } from "@/components/evaluations/EvaluationHistory";
 
 interface VetData {
   workableCandidateId: string;
@@ -400,6 +402,33 @@ function ScheduleModal({
   );
 }
 
+// ─── Evaluation Modal ─────────────────────────────────────────────────────────
+
+function EvaluationModal({
+  candidate,
+  jobShortcode,
+  jobTitle,
+  onClose,
+}: {
+  candidate: WorkableCandidate;
+  jobShortcode: string;
+  jobTitle: string;
+  onClose: () => void;
+}) {
+  return (
+    <Modal onClose={onClose}>
+      <EvaluationForm
+        candidateId={candidate.id}
+        jobShortcode={jobShortcode}
+        candidateName={candidate.name}
+        jobTitle={jobTitle}
+        currentStage={candidate.stage.name}
+        onComplete={() => onClose()}
+      />
+    </Modal>
+  );
+}
+
 // ─── Shared Modal Shell ───────────────────────────────────────────────────────
 
 function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
@@ -438,6 +467,8 @@ export function CandidatePipeline({
   const [jobClosed, setJobClosed] = useState(false);
   const [emailTarget, setEmailTarget] = useState<WorkableCandidate | null>(null);
   const [scheduleTarget, setScheduleTarget] = useState<WorkableCandidate | null>(null);
+  const [evaluateTarget, setEvaluateTarget] = useState<WorkableCandidate | null>(null);
+  const [evaluationsMap, setEvaluationsMap] = useState<Record<string, CandidateEvaluation[]>>({});
 
   const activeStages = stages.filter((s) => s.kind !== "disqualified");
   const activeCandidates = candidates.filter((c) => !c.disqualified);
@@ -623,6 +654,27 @@ export function CandidatePipeline({
           onClose={() => setScheduleTarget(null)}
         />
       )}
+      {evaluateTarget && (
+        <EvaluationModal
+          candidate={evaluateTarget}
+          jobShortcode={jobShortcode}
+          jobTitle={jobTitle}
+          onClose={() => {
+            setEvaluateTarget(null);
+            // Refresh evaluations for this candidate
+            const id = evaluateTarget.id;
+            const stage = evaluateTarget.stage.name;
+            fetch(
+              `/api/postings/${jobShortcode}/candidates/${id}/evaluations?stage=${encodeURIComponent(stage)}`
+            )
+              .then((r) => r.json())
+              .then((d) => {
+                setEvaluationsMap((prev) => ({ ...prev, [id]: d.evaluations ?? [] }));
+              })
+              .catch(() => undefined);
+          }}
+        />
+      )}
 
       {/* Hired confirmation */}
       {closePrompt && (
@@ -739,7 +791,23 @@ export function CandidatePipeline({
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-3">
                             <button
-                              onClick={() => setExpanded(isExpanded ? null : candidate.id)}
+                              onClick={() => {
+                                const next = isExpanded ? null : candidate.id;
+                                setExpanded(next);
+                                if (next && evaluationsMap[candidate.id] === undefined) {
+                                  fetch(
+                                    `/api/postings/${jobShortcode}/candidates/${candidate.id}/evaluations?stage=${encodeURIComponent(candidate.stage.name)}`
+                                  )
+                                    .then((r) => r.json())
+                                    .then((d) => {
+                                      setEvaluationsMap((prev) => ({
+                                        ...prev,
+                                        [candidate.id]: d.evaluations ?? [],
+                                      }));
+                                    })
+                                    .catch(() => undefined);
+                                }
+                              }}
                               className="font-medium text-sm text-gray-900 hover:text-gray-600 text-left"
                             >
                               {candidate.name}
@@ -780,6 +848,29 @@ export function CandidatePipeline({
                             Schedule
                           </button>
 
+                          <button
+                            onClick={() => {
+                              setEvaluateTarget(candidate);
+                              // Pre-load evaluations for history
+                              if (!evaluationsMap[candidate.id]) {
+                                fetch(
+                                  `/api/postings/${jobShortcode}/candidates/${candidate.id}/evaluations?stage=${encodeURIComponent(candidate.stage.name)}`
+                                )
+                                  .then((r) => r.json())
+                                  .then((d) => {
+                                    setEvaluationsMap((prev) => ({
+                                      ...prev,
+                                      [candidate.id]: d.evaluations ?? [],
+                                    }));
+                                  })
+                                  .catch(() => undefined);
+                              }
+                            }}
+                            className="text-xs px-2.5 py-1.5 border border-indigo-300 rounded-md text-indigo-600 hover:bg-indigo-50 transition-colors"
+                          >
+                            Evaluate
+                          </button>
+
                           {prevStage && (
                             <button
                               onClick={() => moveCandidate(candidate.id, prevStage.slug)}
@@ -801,6 +892,15 @@ export function CandidatePipeline({
                           )}
                         </div>
                       </div>
+
+                      {isExpanded && evaluationsMap[candidate.id] !== undefined && (
+                        <div className="mt-4 bg-gray-50 rounded-lg p-4">
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                            Evaluations
+                          </p>
+                          <EvaluationHistory evaluations={evaluationsMap[candidate.id] ?? []} />
+                        </div>
+                      )}
 
                       {isExpanded && vet && (
                         <div className="mt-4 bg-gray-50 rounded-lg p-4 space-y-3">

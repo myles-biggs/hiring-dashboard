@@ -137,6 +137,44 @@ model CandidateCache {
   @@index([workableJobId])
 }
 
+// ─── Candidate Evaluations ────────────────────────────────────────────────────
+
+model CandidateEvaluation {
+  id                   String   @id @default(cuid())
+  workableCandidateId  String
+  workableJobId        String
+  pipelineStage        String
+  evaluatorEmail       String
+  evaluatorName        String?
+
+  cvTruth              String
+  cvResults            String
+  cvBetterEveryDay     String
+  cvNoEgo              String
+
+  gwcGetsIt            Boolean
+  gwcWantsIt           Boolean
+  gwcCapacity          Boolean
+
+  performance          String
+  futureReadiness      String
+
+  notes                String?  @db.Text
+  meetsThreshold       Boolean
+  recommendation       String
+  overrideReason       String?  @db.Text
+  overrideByEmail      String?
+  overrideAt           DateTime?
+
+  workableCommentPosted   Boolean  @default(false)
+  workableCommentPostedAt DateTime?
+
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([workableCandidateId, pipelineStage])
+}
+
 // ─── Audit Log ────────────────────────────────────────────────────────────────
 
 model AuditEvent {
