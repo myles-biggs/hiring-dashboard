@@ -23,8 +23,8 @@ export async function GET() {
           stage: c.stage.name,
         }));
       allCandidates.push(...mapped);
-    } catch {
-      // skip failed jobs
+    } catch (err) {
+      console.error(`Failed to fetch candidates for job ${job.shortcode}:`, err);
     }
   }
 
