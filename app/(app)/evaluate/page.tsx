@@ -14,7 +14,7 @@ interface CandidateOption {
 export default function EvaluatePage() {
   const [candidates, setCandidates] = useState<CandidateOption[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedId, setSelectedId] = useState("");
+  const [selectedKey, setSelectedKey] = useState("");
   const [completed, setCompleted] = useState<CandidateEvaluation | null>(null);
 
   useEffect(() => {
@@ -25,14 +25,14 @@ export default function EvaluatePage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const selected = candidates.find((c) => c.id === selectedId) ?? null;
+  const selected = candidates.find((c) => `${c.id}::${c.jobShortcode}` === selectedKey) ?? null;
 
   function handleComplete(evaluation: CandidateEvaluation) {
     setCompleted(evaluation);
   }
 
   function reset() {
-    setSelectedId("");
+    setSelectedKey("");
     setCompleted(null);
   }
 
@@ -67,13 +67,13 @@ export default function EvaluatePage() {
               <p className="text-sm text-gray-400">No active candidates found.</p>
             ) : (
               <select
-                value={selectedId}
-                onChange={(e) => setSelectedId(e.target.value)}
+                value={selectedKey}
+                onChange={(e) => setSelectedKey(e.target.value)}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
               >
                 <option value="">Select a candidate...</option>
                 {candidates.map((c) => (
-                  <option key={`${c.id}-${c.jobShortcode}`} value={c.id}>
+                  <option key={`${c.id}::${c.jobShortcode}`} value={`${c.id}::${c.jobShortcode}`}>
                     {c.name} — {c.jobTitle} — {c.stage}
                   </option>
                 ))}

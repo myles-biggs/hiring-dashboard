@@ -9,25 +9,25 @@ export async function GET() {
 
   const jobs = await getJobs();
 
-  const results = await Promise.all(
-    jobs.map(async (job) => {
-      try {
-        const candidates = await getCandidatesForJob(job.shortcode);
-        return candidates
-          .filter((c) => !c.disqualified)
-          .map((c) => ({
-            id: c.id,
-            name: c.name,
-            jobShortcode: job.shortcode,
-            jobTitle: job.title,
-            stage: c.stage.name,
-          }));
-      } catch {
-        return [];
-      }
-    })
-  );
+  const allCandidates: { id: string; name: string; jobShortcode: string; jobTitle: string; stage: string }[] = [];
+  for (const job of jobs) {
+    try {
+      const candidates = await getCandidatesForJob(job.shortcode);
+      const mapped = candidates
+        .filter((c) => !c.disqualified)
+        .map((c) => ({
+          id: c.id,
+          name: c.name,
+          jobShortcode: job.shortcode,
+          jobTitle: job.title,
+          stage: c.stage.name,
+        }));
+      allCandidates.push(...mapped);
+    } catch {
+      // skip failed jobs
+    }
+  }
 
-  const candidates = results.flat();
+  const candidates = allCandidates;
   return NextResponse.json({ candidates });
 }

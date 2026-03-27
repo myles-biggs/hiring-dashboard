@@ -84,6 +84,10 @@ export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ shortcode: string; candidateId: string }> }
 ) {
+  if (!process.env.WORKABLE_API_TOKEN) {
+    return NextResponse.json({ error: "Workable not configured" }, { status: 500 });
+  }
+
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -106,14 +110,15 @@ export async function POST(
 
   const commentBody = evaluations.map(formatEvaluation).join("\n\n---\n\n");
 
-  const workableUrl = `https://www.workable.com/spi/v3/jobs/${shortcode}/candidates/${candidateId}/activities`;
+  const baseUrl = `https://${process.env.WORKABLE_SUBDOMAIN}.workable.com/spi/v3`;
+  const workableUrl = `${baseUrl}/jobs/${shortcode}/candidates/${candidateId}/activities`;
   const res = await fetch(workableUrl, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${process.env.WORKABLE_API_TOKEN}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ action: "comment", body: commentBody }),
+    body: JSON.stringify({ action: "note", body: commentBody }),
   });
 
   if (!res.ok) {
@@ -126,7 +131,7 @@ export async function POST(
 
   const now = new Date();
   await prisma.candidateEvaluation.updateMany({
-    where: { workableCandidateId: candidateId, workableJobId: shortcode },
+    where: { id: { in: evaluations.map((e) => e.id) } },
     data: { workableCommentPosted: true, workableCommentPostedAt: now },
   });
 
