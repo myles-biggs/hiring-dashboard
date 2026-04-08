@@ -570,56 +570,22 @@ export function CandidatePipeline({
     setVetAllSummary(null);
     setError(null);
 
-    // Fetch the list of unvetted candidates
-    const listRes = await fetch(`/api/postings/${jobShortcode}/vet-all`);
-    if (!listRes.ok) {
-      setError("Failed to load candidate list.");
-      setVettingAll(false);
-      return;
-    }
-
-    const { unvetted } = (await listRes.json()) as {
-      unvetted: { id: string; name: string }[];
-      total: number;
-    };
-
-    if (unvetted.length === 0) {
-      setVetAllSummary("All candidates already scored");
-      setVettingAll(false);
-      return;
-    }
-
-    let vetted = 0;
-    let lastError = "";
-    for (const candidate of unvetted) {
-      setVetAllSummary(`Vetting ${vetted + 1} of ${unvetted.length}: ${candidate.name}…`);
-      try {
-        const res = await fetch(
-          `/api/postings/${jobShortcode}/candidates/${candidate.id}/vet`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ briefId }),
-          }
-        );
-        const body = await res.json();
-        if (res.ok) {
-          setVetMap((prev) => ({ ...prev, [candidate.id]: body }));
-          vetted++;
-        } else {
-          lastError = body.error ?? `HTTP ${res.status}`;
-        }
-      } catch (err) {
-        lastError = err instanceof Error ? err.message : "Unknown error";
-      }
-    }
+    const res = await fetch(`/api/postings/${jobShortcode}/vet-all`, { method: "POST" });
+    const body = await res.json();
 
     setVettingAll(false);
-    if (vetted > 0) {
-      setVetAllSummary(`${vetted} candidate${vetted !== 1 ? "s" : ""} vetted`);
-    } else {
-      setVetAllSummary(`No candidates could be vetted${lastError ? `: ${lastError}` : ""}`);
+
+    if (!res.ok) {
+      setError(body.error ?? "Failed to start vetting.");
+      return;
     }
+
+    if (!body.queued) {
+      setVetAllSummary("All candidates already scored");
+      return;
+    }
+
+    setVetAllSummary(`Vetting ${body.toVet} candidates in background — refresh in ~30 seconds to see scores`);
   }
 
   async function runVet(candidate: WorkableCandidate) {
