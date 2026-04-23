@@ -1,7 +1,7 @@
 import { authOptions } from "@/lib/auth/config";
 import { prisma } from "@/lib/utils/prisma";
 import { getServerSession } from "next-auth";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { ApprovalBadge } from "@/components/brief/ApprovalBadge";
 import { ApprovalActions } from "@/components/brief/ApprovalActions";
@@ -22,6 +22,24 @@ export default async function BriefDetailPage({
 
   const canApprove = isApprover || isTalentAcquisition;
   const canGenerateJD = brief.approvalStatus === "APPROVED";
+
+  async function archiveBrief() {
+    "use server";
+    await fetch(`${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/api/briefs/${id}/archive`, {
+      method: "POST",
+    });
+    redirect("/briefs");
+  }
+
+  const approverLine = (() => {
+    if (!brief.approverName && !brief.approvedAt) return null;
+    const action = brief.approvalStatus === "REJECTED" ? "Rejected" : "Approved";
+    const nameEmail = [brief.approverName, brief.approverEmail ? `(${brief.approverEmail})` : null]
+      .filter(Boolean)
+      .join(" ");
+    const date = brief.approvedAt ? new Date(brief.approvedAt).toLocaleDateString("en-CA") : null;
+    return [action, "by", nameEmail, date ? `on ${date}` : null].filter(Boolean).join(" ");
+  })();
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -104,17 +122,33 @@ export default async function BriefDetailPage({
         {brief.approvalNote && (
           <Section title="Approval note">
             <p className="text-sm text-gray-700">{brief.approvalNote}</p>
-            {brief.approverName && (
-              <p className="text-xs text-gray-400 mt-2">
-                — {brief.approverName},{" "}
-                {brief.approvedAt ? new Date(brief.approvedAt).toLocaleDateString("en-CA") : ""}
-              </p>
+            {approverLine && (
+              <p className="text-xs text-gray-400 mt-2">— {approverLine}</p>
             )}
+          </Section>
+        )}
+
+        {!brief.approvalNote && approverLine && (
+          <Section title="Approval">
+            <p className="text-xs text-gray-500">{approverLine}</p>
           </Section>
         )}
 
         {canApprove && brief.approvalStatus === "PENDING" && (
           <ApprovalActions briefId={brief.id} />
+        )}
+
+        {isTalentAcquisition && (
+          <div className="pt-2">
+            <form action={archiveBrief}>
+              <button
+                type="submit"
+                className="text-xs px-3 py-1.5 border border-gray-300 rounded-lg text-gray-500 hover:bg-gray-50 transition-colors"
+              >
+                Archive brief
+              </button>
+            </form>
+          </div>
         )}
       </div>
     </div>

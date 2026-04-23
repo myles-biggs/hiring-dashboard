@@ -29,6 +29,7 @@ export default async function JobPipelinePage({
       aiVetScore: true,
       aiVetStatus: true,
       aiVetSummary: true,
+      aiVetRationale: true,
       aiVetQuestions: true,
     },
   });

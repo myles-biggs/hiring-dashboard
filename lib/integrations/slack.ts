@@ -94,6 +94,34 @@ export async function postBriefApprovalRequest(brief: {
   });
 }
 
+export async function postStarCandidateAlert(params: {
+  candidateName: string;
+  roleTitle: string;
+  score: number;
+  shortcode: string;
+}): Promise<void> {
+  const channelId = process.env.SLACK_HIRING_CHANNEL_ID;
+  const token = process.env.SLACK_BOT_TOKEN;
+  if (!channelId || !token) return;
+
+  const url = `https://level-hiring.vercel.app/postings/${params.shortcode}`;
+
+  await slackPost("chat.postMessage", {
+    channel: channelId,
+    text: `Star Candidate: ${params.candidateName} for ${params.roleTitle} — AI Score: ${params.score}/100`,
+    blocks: [
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `*Star Candidate Alert*\n*${params.candidateName}* applied for *${params.roleTitle}*\nAI Score: *${params.score}/100*\n<${url}|View pipeline →>`,
+        },
+      },
+    ],
+    unfurl_links: false,
+  });
+}
+
 export async function postPipelineSummary(text: string, channelId?: string): Promise<void> {
   const channel = channelId ?? process.env.SLACK_HIRING_CHANNEL_ID!;
 

@@ -36,8 +36,17 @@ Output format: return valid JSON with this exact structure:
     "quantifiedOutcomes": 0-20
   },
   "cultureRiskFlags": ["string"],
-  "suggestedInterviewQuestions": ["string", "string", "string"]
-}`;
+  "suggestedInterviewQuestions": ["string", "string", "string"],
+  "scoreRationale": "1-2 sentence plain-English explanation of the top reason(s) for this score. Be specific — mention actual evidence from the resume."
+}
+
+Semantic inference rules:
+- Infer seniority from context, not just titles. "Led a team of 5" = management experience even without "Manager" title.
+- Treat equivalent role signals: "Head of", "Lead", "Principal", "Director of" as seniority indicators regardless of exact wording.
+- A candidate who "owned" or "drove" or "built from scratch" a program likely has the equivalent experience of someone with a formal title.
+- For agency experience: treat in-house performance marketing roles at companies with significant ad spend as equivalent to agency experience.
+- For AI fluency: award "pass" if the candidate demonstrates workflow integration of AI tools (Copilot, ChatGPT, Claude, Midjourney, etc.) — not just mentions them.
+- Do not penalize career changers if their transferable skills clearly map to the role requirements.`;
 
 export function buildVetPrompt(
   candidate: WorkableCandidate,

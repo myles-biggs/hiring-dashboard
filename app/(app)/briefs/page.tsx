@@ -5,6 +5,7 @@ import { HiringBrief } from "@prisma/client";
 
 export default async function BriefsListPage() {
   const briefs = await prisma.hiringBrief.findMany({
+    where: { archivedAt: null },
     orderBy: { createdAt: "desc" },
   });
 

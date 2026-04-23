@@ -1,8 +1,8 @@
 "use client";
 
+import { useState } from "react";
+import { WorkableCandidate } from "@/types/workable";
 import { WorkableStageOption } from "@/lib/integrations/workable";
-import { WorkableCandidate, WorkableEmailTemplate } from "@/types/workable";
-import { useEffect, useState } from "react";
 import { EvaluationForm, CandidateEvaluation } from "@/components/evaluations/EvaluationForm";
 import { EvaluationHistory } from "@/components/evaluations/EvaluationHistory";
 
@@ -12,6 +12,12 @@ interface VetData {
   aiVetStatus: string | null;
   aiVetSummary: string | null;
   aiVetQuestions: string[];
+  aiVetRationale?: string | null;
+}
+
+interface SilverMedalistState {
+  isSilverMedalist: boolean;
+  silverMedalistNote: string | null;
 }
 
 interface Props {
@@ -22,384 +28,6 @@ interface Props {
   vetMap: Record<string, VetData>;
   briefId: string | null;
   jdEnglish: string | null;
-}
-
-// ─── Email Modal ──────────────────────────────────────────────────────────────
-
-function EmailModal({
-  jobShortcode,
-  candidate,
-  onClose,
-}: {
-  jobShortcode: string;
-  candidate: WorkableCandidate;
-  onClose: () => void;
-}) {
-  const [templates, setTemplates] = useState<WorkableEmailTemplate[]>([]);
-  const [loadingTemplates, setLoadingTemplates] = useState(true);
-  const [subject, setSubject] = useState("");
-  const [body, setBody] = useState("");
-  const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch("/api/postings/templates")
-      .then((r) => r.json())
-      .then((d) => setTemplates(d.templates ?? []))
-      .catch(() => setTemplates([]))
-      .finally(() => setLoadingTemplates(false));
-  }, []);
-
-  function applyTemplate(t: WorkableEmailTemplate) {
-    setSubject(t.subject);
-    // Strip basic HTML tags for the textarea
-    setBody(t.body.replace(/<[^>]+>/g, "").trim());
-  }
-
-  async function send() {
-    if (!subject.trim() || !body.trim()) return;
-    setSending(true);
-    setError(null);
-    const res = await fetch(
-      `/api/postings/${jobShortcode}/candidates/${candidate.id}/email`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subject, body }),
-      }
-    );
-    setSending(false);
-    if (!res.ok) {
-      const d = await res.json();
-      setError(d.error ?? "Failed to send.");
-      return;
-    }
-    setSent(true);
-  }
-
-  return (
-    <Modal onClose={onClose}>
-      <h2 className="text-lg font-semibold text-gray-900 mb-1">
-        Email {candidate.name}
-      </h2>
-      <p className="text-sm text-gray-500 mb-5">{candidate.email}</p>
-
-      {sent ? (
-        <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-3 mb-4">
-          Email sent successfully.
-        </div>
-      ) : (
-        <>
-          {/* Template picker */}
-          {loadingTemplates ? (
-            <p className="text-xs text-gray-400 mb-4">Loading templates…</p>
-          ) : templates.length > 0 ? (
-            <div className="mb-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                Workable templates
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {templates.map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => applyTemplate(t)}
-                    className="text-xs px-3 py-1.5 border border-gray-300 rounded-full text-gray-600 hover:bg-gray-50 transition-colors"
-                  >
-                    {t.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          <div className="space-y-3">
-            <div>
-              <label className="text-xs font-medium text-gray-600 block mb-1">Subject</label>
-              <input
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                placeholder="Subject"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-600 block mb-1">Message</label>
-              <textarea
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                rows={8}
-                placeholder="Write your message…"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"
-              />
-            </div>
-          </div>
-
-          {error && (
-            <p className="text-sm text-red-600 mt-3">{error}</p>
-          )}
-
-          <div className="flex justify-end gap-3 mt-5">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={send}
-              disabled={sending || !subject.trim() || !body.trim()}
-              className="px-4 py-2 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
-            >
-              {sending ? "Sending…" : "Send email"}
-            </button>
-          </div>
-        </>
-      )}
-
-      {sent && (
-        <div className="flex justify-end mt-4">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
-          >
-            Close
-          </button>
-        </div>
-      )}
-    </Modal>
-  );
-}
-
-// ─── Schedule Modal ───────────────────────────────────────────────────────────
-
-const DURATIONS = [
-  { label: "15 min", value: 15 },
-  { label: "30 min", value: 30 },
-  { label: "45 min", value: 45 },
-  { label: "1 hour", value: 60 },
-  { label: "90 min", value: 90 },
-];
-
-function ScheduleModal({
-  jobShortcode,
-  jobTitle,
-  candidate,
-  onClose,
-}: {
-  jobShortcode: string;
-  jobTitle: string;
-  candidate: WorkableCandidate;
-  onClose: () => void;
-}) {
-  const defaultDate = new Date();
-  defaultDate.setDate(defaultDate.getDate() + 1);
-  defaultDate.setHours(10, 0, 0, 0);
-
-  const [title, setTitle] = useState(`Interview – ${candidate.name} for ${jobTitle}`);
-  const [date, setDate] = useState(defaultDate.toISOString().slice(0, 10));
-  const [time, setTime] = useState("10:00");
-  const [duration, setDuration] = useState(60);
-  const [addMeet, setAddMeet] = useState(true);
-  const [interviewers, setInterviewers] = useState("");
-  const [description, setDescription] = useState("");
-  const [scheduling, setScheduling] = useState(false);
-  const [result, setResult] = useState<{ htmlLink: string; meetLink?: string } | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  async function schedule() {
-    const interviewerEmails = interviewers
-      .split(/[\s,]+/)
-      .map((e) => e.trim())
-      .filter(Boolean);
-
-    if (!interviewerEmails.length) {
-      setError("Add at least one interviewer email.");
-      return;
-    }
-
-    const startIso = new Date(`${date}T${time}:00`).toISOString();
-
-    setScheduling(true);
-    setError(null);
-
-    const res = await fetch(
-      `/api/postings/${jobShortcode}/candidates/${candidate.id}/schedule`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          candidateName: candidate.name,
-          candidateEmail: candidate.email,
-          title,
-          startIso,
-          durationMinutes: duration,
-          addMeet,
-          interviewerEmails,
-          description,
-        }),
-      }
-    );
-
-    setScheduling(false);
-
-    if (!res.ok) {
-      const d = await res.json();
-      setError(d.error ?? "Failed to schedule.");
-      return;
-    }
-
-    setResult(await res.json());
-  }
-
-  return (
-    <Modal onClose={onClose}>
-      <h2 className="text-lg font-semibold text-gray-900 mb-1">Schedule interview</h2>
-      <p className="text-sm text-gray-500 mb-5">{candidate.name} · {candidate.email}</p>
-
-      {result ? (
-        <div className="space-y-4">
-          <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
-            Calendar invite sent to {candidate.name} and all interviewers.
-          </div>
-          <div className="space-y-2">
-            <a
-              href={result.htmlLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm text-gray-900 underline block"
-            >
-              View in Google Calendar →
-            </a>
-            {result.meetLink && (
-              <a
-                href={result.meetLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-green-700 underline block"
-              >
-                Google Meet link →
-              </a>
-            )}
-          </div>
-          <div className="flex justify-end mt-4">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      ) : (
-        <>
-          <div className="space-y-3">
-            <div>
-              <label className="text-xs font-medium text-gray-600 block mb-1">Event title</label>
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-medium text-gray-600 block mb-1">Date</label>
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-gray-600 block mb-1">Time (ET)</label>
-                <input
-                  type="time"
-                  value={time}
-                  onChange={(e) => setTime(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="text-xs font-medium text-gray-600 block mb-2">Duration</label>
-              <div className="flex gap-2 flex-wrap">
-                {DURATIONS.map((d) => (
-                  <button
-                    key={d.value}
-                    onClick={() => setDuration(d.value)}
-                    className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                      duration === d.value
-                        ? "bg-gray-900 text-white border-gray-900"
-                        : "border-gray-300 text-gray-600 hover:bg-gray-50"
-                    }`}
-                  >
-                    {d.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="text-xs font-medium text-gray-600 block mb-1">
-                Interviewer emails <span className="text-gray-400">(comma or space separated)</span>
-              </label>
-              <input
-                value={interviewers}
-                onChange={(e) => setInterviewers(e.target.value)}
-                placeholder="name@level.agency, name2@level.agency"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-medium text-gray-600 block mb-1">
-                Description <span className="text-gray-400">(optional)</span>
-              </label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={3}
-                placeholder="Interview agenda, prep notes…"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"
-              />
-            </div>
-
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={addMeet}
-                onChange={(e) => setAddMeet(e.target.checked)}
-                className="rounded border-gray-300"
-              />
-              <span className="text-sm text-gray-700">Add Google Meet link</span>
-            </label>
-          </div>
-
-          {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
-
-          <div className="flex justify-end gap-3 mt-5">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={schedule}
-              disabled={scheduling}
-              className="px-4 py-2 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
-            >
-              {scheduling ? "Scheduling…" : "Schedule interview"}
-            </button>
-          </div>
-        </>
-      )}
-    </Modal>
-  );
 }
 
 // ─── Evaluation Modal ─────────────────────────────────────────────────────────
@@ -440,7 +68,7 @@ function Modal({ children, onClose }: { children: React.ReactNode; onClose: () =
       <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto relative">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl leading-none"
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl font-light"
           aria-label="Close"
         >
           ×
@@ -460,25 +88,20 @@ export function CandidatePipeline({
   stages,
   vetMap: initialVetMap,
   briefId,
-  jdEnglish,
+  jdEnglish: _jdEnglish,
 }: Props) {
-  const [candidates, setCandidates] = useState(initialCandidates);
+  const [candidates] = useState(initialCandidates);
   const [vetMap, setVetMap] = useState(initialVetMap);
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [movingId, setMovingId] = useState<string | null>(null);
   const [vettingId, setVettingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<"applied" | "score">("score");
   const [filterStatus, setFilterStatus] = useState<"all" | "Qualified" | "Unqualified">("all");
   const [vettingAll, setVettingAll] = useState(false);
   const [vetAllSummary, setVetAllSummary] = useState<string | null>(null);
-  const [closePrompt, setClosePrompt] = useState<{ candidateId: string; stageSlug: string } | null>(null);
-  const [closing, setClosing] = useState(false);
-  const [jobClosed, setJobClosed] = useState(false);
-  const [emailTarget, setEmailTarget] = useState<WorkableCandidate | null>(null);
-  const [scheduleTarget, setScheduleTarget] = useState<WorkableCandidate | null>(null);
   const [evaluateTarget, setEvaluateTarget] = useState<WorkableCandidate | null>(null);
   const [evaluationsMap, setEvaluationsMap] = useState<Record<string, CandidateEvaluation[]>>({});
+  const [silverMap, setSilverMap] = useState<Record<string, SilverMedalistState>>({});
 
   const activeStages = stages.filter((s) => s.kind !== "disqualified");
   const activeCandidates = candidates.filter((c) => !c.disqualified);
@@ -505,66 +128,6 @@ export function CandidatePipeline({
     byStage[stage.slug] = stageCandidates;
   }
 
-  async function moveCandidate(candidateId: string, targetStageSlug: string) {
-    const targetStage = stages.find((s) => s.slug === targetStageSlug);
-    if (targetStage?.kind === "hired") {
-      setClosePrompt({ candidateId, stageSlug: targetStageSlug });
-      return;
-    }
-    await executeMoveCandidate(candidateId, targetStageSlug);
-  }
-
-  async function executeMoveCandidate(candidateId: string, targetStageSlug: string) {
-    setMovingId(candidateId);
-    setError(null);
-
-    const res = await fetch(`/api/postings/${jobShortcode}/candidates/${candidateId}/move`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ stageSlug: targetStageSlug }),
-    });
-
-    if (!res.ok) {
-      const body = await res.json();
-      setError(body.error ?? "Failed to move candidate.");
-      setMovingId(null);
-      return;
-    }
-
-    const targetStage = stages.find((s) => s.slug === targetStageSlug);
-    if (targetStage) {
-      setCandidates((prev) =>
-        prev.map((c) =>
-          c.id === candidateId
-            ? { ...c, stage: { kind: targetStage.kind, name: targetStage.name, position: targetStage.position } }
-            : c
-        )
-      );
-    }
-    setMovingId(null);
-  }
-
-  async function confirmHiredAndClose() {
-    if (!closePrompt) return;
-    await executeMoveCandidate(closePrompt.candidateId, closePrompt.stageSlug);
-    setClosing(true);
-    const res = await fetch(`/api/postings/${jobShortcode}/close`, { method: "POST" });
-    if (!res.ok) {
-      const body = await res.json();
-      setError(body.error ?? "Failed to close job.");
-    } else {
-      setJobClosed(true);
-    }
-    setClosing(false);
-    setClosePrompt(null);
-  }
-
-  async function confirmHiredOnly() {
-    if (!closePrompt) return;
-    await executeMoveCandidate(closePrompt.candidateId, closePrompt.stageSlug);
-    setClosePrompt(null);
-  }
-
   async function runVetAll() {
     setVettingAll(true);
     setVetAllSummary(null);
@@ -588,6 +151,33 @@ export function CandidatePipeline({
     setVetAllSummary(`Vetting ${body.toVet} candidates in background — refresh in ~30 seconds to see scores`);
   }
 
+  async function toggleSilverMedalist(candidate: WorkableCandidate) {
+    const current = silverMap[candidate.id]?.isSilverMedalist ?? false;
+    const next = !current;
+
+    setSilverMap((prev) => ({
+      ...prev,
+      [candidate.id]: { isSilverMedalist: next, silverMedalistNote: prev[candidate.id]?.silverMedalistNote ?? null },
+    }));
+
+    const res = await fetch(
+      `/api/postings/${jobShortcode}/candidates/${candidate.id}/silver-medalist`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isSilverMedalist: next }),
+      }
+    );
+
+    if (!res.ok) {
+      // Revert on failure
+      setSilverMap((prev) => ({
+        ...prev,
+        [candidate.id]: { isSilverMedalist: current, silverMedalistNote: prev[candidate.id]?.silverMedalistNote ?? null },
+      }));
+    }
+  }
+
   async function runVet(candidate: WorkableCandidate) {
     setVettingId(candidate.id);
     setError(null);
@@ -609,37 +199,17 @@ export function CandidatePipeline({
     setVettingId(null);
   }
 
-  const currentStageIndex = (candidate: WorkableCandidate) =>
-    activeStages.findIndex((s) => s.name === candidate.stage.name);
-
   return (
     <div className="space-y-6">
-      {/* Modals */}
-      {emailTarget && (
-        <EmailModal
-          jobShortcode={jobShortcode}
-          candidate={emailTarget}
-          onClose={() => setEmailTarget(null)}
-        />
-      )}
-      {scheduleTarget && (
-        <ScheduleModal
-          jobShortcode={jobShortcode}
-          jobTitle={jobTitle}
-          candidate={scheduleTarget}
-          onClose={() => setScheduleTarget(null)}
-        />
-      )}
       {evaluateTarget && (
         <EvaluationModal
           candidate={evaluateTarget}
           jobShortcode={jobShortcode}
           jobTitle={jobTitle}
           onClose={() => {
-            setEvaluateTarget(null);
-            // Refresh evaluations for this candidate
             const id = evaluateTarget.id;
             const stage = evaluateTarget.stage.name;
+            setEvaluateTarget(null);
             fetch(
               `/api/postings/${jobShortcode}/candidates/${id}/evaluations?stage=${encodeURIComponent(stage)}`
             )
@@ -652,44 +222,6 @@ export function CandidatePipeline({
         />
       )}
 
-      {/* Hired confirmation */}
-      {closePrompt && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 max-w-md w-full mx-4">
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">Mark as Hired</h2>
-            <p className="text-sm text-gray-600 mb-6">
-              Do you want to close this job posting on Workable now that a candidate has been hired?
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setClosePrompt(null)}
-                className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmHiredOnly}
-                className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Mark hired, keep open
-              </button>
-              <button
-                onClick={confirmHiredAndClose}
-                disabled={closing}
-                className="px-4 py-2 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
-              >
-                {closing ? "Closing…" : "Mark hired & close posting"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {jobClosed && (
-        <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
-          Job posting closed on Workable.
-        </div>
-      )}
       {error && (
         <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
           {error}
@@ -698,33 +230,33 @@ export function CandidatePipeline({
 
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500">Sort:</span>
-          <button
-            onClick={() => setSortBy("score")}
-            className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${sortBy === "score" ? "bg-gray-900 text-white border-gray-900" : "border-gray-300 text-gray-600 hover:bg-gray-50"}`}
-          >
-            AI Score
-          </button>
-          <button
-            onClick={() => setSortBy("applied")}
-            className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${sortBy === "applied" ? "bg-gray-900 text-white border-gray-900" : "border-gray-300 text-gray-600 hover:bg-gray-50"}`}
-          >
-            Applied date
-          </button>
-        </div>
-        <div className="flex items-center gap-2 ml-4">
-          <span className="text-xs text-gray-500">Filter:</span>
-          {(["all", "Qualified", "Unqualified"] as const).map((f) => (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500">Sort:</span>
             <button
-              key={f}
-              onClick={() => setFilterStatus(f)}
-              className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${filterStatus === f ? "bg-gray-900 text-white border-gray-900" : "border-gray-300 text-gray-600 hover:bg-gray-50"}`}
+              onClick={() => setSortBy("score")}
+              className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${sortBy === "score" ? "bg-gray-900 text-white border-gray-900" : "border-gray-300 text-gray-600 hover:bg-gray-50"}`}
             >
-              {f === "all" ? "All" : f}
+              AI Score
             </button>
-          ))}
-        </div>
+            <button
+              onClick={() => setSortBy("applied")}
+              className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${sortBy === "applied" ? "bg-gray-900 text-white border-gray-900" : "border-gray-300 text-gray-600 hover:bg-gray-50"}`}
+            >
+              Applied date
+            </button>
+          </div>
+          <div className="flex items-center gap-2 ml-4">
+            <span className="text-xs text-gray-500">Filter:</span>
+            {(["all", "Qualified", "Unqualified"] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilterStatus(f)}
+                className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${filterStatus === f ? "bg-gray-900 text-white border-gray-900" : "border-gray-300 text-gray-600 hover:bg-gray-50"}`}
+              >
+                {f === "all" ? "All" : f}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
@@ -757,9 +289,6 @@ export function CandidatePipeline({
                 {stageCandidates.map((candidate) => {
                   const vet = vetMap[candidate.id];
                   const isExpanded = expanded === candidate.id;
-                  const stageIdx = currentStageIndex(candidate);
-                  const nextStage = activeStages[stageIdx + 1];
-                  const prevStage = activeStages[stageIdx - 1];
 
                   return (
                     <div key={candidate.id} className="px-5 py-4">
@@ -792,6 +321,9 @@ export function CandidatePipeline({
                               <VetScoreBadge score={vet.aiVetScore} />
                             )}
                           </div>
+                          {vet?.aiVetRationale && (
+                            <p className="text-xs text-gray-400 italic mt-1">{vet.aiVetRationale}</p>
+                          )}
                           {candidate.headline && (
                             <p className="text-xs text-gray-500 mt-0.5 truncate">{candidate.headline}</p>
                           )}
@@ -802,6 +334,14 @@ export function CandidatePipeline({
 
                         <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
                           <button
+                            onClick={() => toggleSilverMedalist(candidate)}
+                            title={silverMap[candidate.id]?.isSilverMedalist ? "Remove silver medalist" : "Mark as silver medalist"}
+                            className="text-xs px-2 py-1.5 border border-gray-300 rounded-md text-gray-500 hover:bg-gray-50 transition-colors"
+                          >
+                            {silverMap[candidate.id]?.isSilverMedalist ? "★" : "☆"}
+                          </button>
+
+                          <button
                             onClick={() => runVet(candidate)}
                             disabled={vettingId === candidate.id}
                             title="Run AI vet"
@@ -811,23 +351,8 @@ export function CandidatePipeline({
                           </button>
 
                           <button
-                            onClick={() => setEmailTarget(candidate)}
-                            className="text-xs px-2.5 py-1.5 border border-gray-300 rounded-md text-gray-600 hover:bg-gray-50 transition-colors"
-                          >
-                            Email
-                          </button>
-
-                          <button
-                            onClick={() => setScheduleTarget(candidate)}
-                            className="text-xs px-2.5 py-1.5 border border-gray-300 rounded-md text-gray-600 hover:bg-gray-50 transition-colors"
-                          >
-                            Schedule
-                          </button>
-
-                          <button
                             onClick={() => {
                               setEvaluateTarget(candidate);
-                              // Pre-load evaluations for history
                               if (!evaluationsMap[candidate.id]) {
                                 fetch(
                                   `/api/postings/${jobShortcode}/candidates/${candidate.id}/evaluations?stage=${encodeURIComponent(candidate.stage.name)}`
@@ -846,26 +371,6 @@ export function CandidatePipeline({
                           >
                             Evaluate
                           </button>
-
-                          {prevStage && (
-                            <button
-                              onClick={() => moveCandidate(candidate.id, prevStage.slug)}
-                              disabled={movingId === candidate.id}
-                              className="text-xs px-2.5 py-1.5 border border-gray-300 rounded-md text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
-                            >
-                              ← {prevStage.name}
-                            </button>
-                          )}
-
-                          {nextStage && (
-                            <button
-                              onClick={() => moveCandidate(candidate.id, nextStage.slug)}
-                              disabled={movingId === candidate.id}
-                              className="text-xs px-2.5 py-1.5 bg-gray-900 text-white rounded-md hover:bg-gray-800 disabled:opacity-40 transition-colors"
-                            >
-                              {nextStage.name} →
-                            </button>
-                          )}
                         </div>
                       </div>
 
@@ -886,6 +391,14 @@ export function CandidatePipeline({
                                 AI Summary
                               </p>
                               <p className="text-sm text-gray-700">{vet.aiVetSummary}</p>
+                            </div>
+                          )}
+                          {vet.aiVetRationale && (
+                            <div>
+                              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                                Score rationale
+                              </p>
+                              <p className="text-sm text-gray-500 italic">{vet.aiVetRationale}</p>
                             </div>
                           )}
                           {vet.aiVetQuestions?.length > 0 && (

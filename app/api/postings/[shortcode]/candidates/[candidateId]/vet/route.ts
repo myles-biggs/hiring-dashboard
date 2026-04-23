@@ -4,6 +4,7 @@ import { generateJson } from "@/lib/integrations/gemini";
 import { RESUME_VET_SYSTEM_PROMPT, buildVetPrompt } from "@/lib/prompts/resume-vet";
 import { requireRole, AuthError } from "@/lib/auth/roles";
 import { prisma } from "@/lib/utils/prisma";
+import { postStarCandidateAlert } from "@/lib/integrations/slack";
 import { getServerSession } from "next-auth";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -32,7 +33,6 @@ export async function POST(
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  // Get full candidate data from Workable
   let candidate: Awaited<ReturnType<typeof getCandidate>>;
   try {
     candidate = await getCandidate(candidateId);
@@ -41,7 +41,6 @@ export async function POST(
     return NextResponse.json({ error: `Failed to fetch candidate: ${msg}` }, { status: 502 });
   }
 
-  // Get brief data if available
   const brief = parsed.data.briefId
     ? await prisma.hiringBrief.findUnique({
         where: { id: parsed.data.briefId },
@@ -49,7 +48,6 @@ export async function POST(
       })
     : null;
 
-  // When no brief is linked, fetch the live job from Workable to use as role context
   let jobDescription: string | undefined;
   if (!brief) {
     try {
@@ -58,7 +56,7 @@ export async function POST(
         ? job.description.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim().slice(0, 1000)
         : undefined;
     } catch {
-      // Non-fatal — vet will proceed without role description
+      // Non-fatal
     }
   }
 
@@ -76,6 +74,7 @@ export async function POST(
     status: string;
     score: number;
     summary: string;
+    scoreRationale?: string;
     aPlayerSignals: Record<string, string>;
     suggestedInterviewQuestions: string[];
   };
@@ -86,6 +85,7 @@ export async function POST(
       status: result.status,
       score: result.score,
       summary: result.summary,
+      scoreRationale: result.scoreRationale,
       aPlayerSignals: result.aPlayerSignals ?? {},
       suggestedInterviewQuestions: result.suggestedInterviewQuestions ?? [],
     };
@@ -98,7 +98,6 @@ export async function POST(
     ? candidate.stage
     : (candidate.stage as { name?: string })?.name ?? "Applied";
 
-  // Upsert into CandidateCache
   const cached = await prisma.candidateCache.upsert({
     where: { workableCandidateId: candidateId },
     create: {
@@ -110,9 +109,12 @@ export async function POST(
       appliedAt: new Date(candidate.created_at),
       resumeUrl: candidate.resume_url ?? null,
       linkedinUrl: candidate.linkedin_url ?? null,
+      country: candidate.location?.country ?? null,
+      city: candidate.location?.city ?? null,
       aiVetScore: vetResult.score,
       aiVetStatus: vetResult.status,
       aiVetSummary: vetResult.summary,
+      aiVetRationale: vetResult.scoreRationale ?? null,
       aiVetQuestions: vetResult.suggestedInterviewQuestions,
       aiVetRunAt: new Date(),
       briefId: parsed.data.briefId ?? null,
@@ -121,17 +123,30 @@ export async function POST(
       aiVetScore: vetResult.score,
       aiVetStatus: vetResult.status,
       aiVetSummary: vetResult.summary,
+      aiVetRationale: vetResult.scoreRationale ?? null,
       aiVetQuestions: vetResult.suggestedInterviewQuestions,
       aiVetRunAt: new Date(),
       currentStage: stageName,
+      country: candidate.location?.country ?? null,
+      city: candidate.location?.city ?? null,
     },
   });
+
+  if ((cached.aiVetScore ?? 0) >= 80) {
+    postStarCandidateAlert({
+      candidateName: candidate.name,
+      roleTitle,
+      score: cached.aiVetScore!,
+      shortcode,
+    }).catch(() => undefined);
+  }
 
   return NextResponse.json({
     workableCandidateId: candidateId,
     aiVetScore: cached.aiVetScore,
     aiVetStatus: cached.aiVetStatus,
     aiVetSummary: cached.aiVetSummary,
+    aiVetRationale: cached.aiVetRationale,
     aiVetQuestions: cached.aiVetQuestions,
   });
 }

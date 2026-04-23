@@ -15,6 +15,7 @@ export interface WorkableCandidate {
   updated_at: string;
   resume_url?: string;
   linkedin_url?: string;
+  location?: { country?: string; city?: string };
   cover_letter?: string;
   summary?: string;
   education_entries?: EducationEntry[];

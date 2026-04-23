@@ -15,6 +15,7 @@ export default function EvaluatePage() {
   const [candidates, setCandidates] = useState<CandidateOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedKey, setSelectedKey] = useState("");
+  const [search, setSearch] = useState("");
   const [completed, setCompleted] = useState<CandidateEvaluation | null>(null);
 
   useEffect(() => {
@@ -27,12 +28,34 @@ export default function EvaluatePage() {
 
   const selected = candidates.find((c) => `${c.id}::${c.jobShortcode}` === selectedKey) ?? null;
 
+  const filteredCandidates = search.trim()
+    ? candidates.filter((c) => {
+        const q = search.toLowerCase();
+        return (
+          c.name.toLowerCase().includes(q) ||
+          c.jobTitle.toLowerCase().includes(q) ||
+          c.stage.toLowerCase().includes(q)
+        );
+      })
+    : candidates;
+
+  function selectCandidate(c: CandidateOption) {
+    setSelectedKey(`${c.id}::${c.jobShortcode}`);
+    setSearch(c.name);
+  }
+
+  function clearSelection() {
+    setSelectedKey("");
+    setSearch("");
+  }
+
   function handleComplete(evaluation: CandidateEvaluation) {
     setCompleted(evaluation);
   }
 
   function reset() {
     setSelectedKey("");
+    setSearch("");
     setCompleted(null);
   }
 
@@ -66,18 +89,51 @@ export default function EvaluatePage() {
             ) : candidates.length === 0 ? (
               <p className="text-sm text-gray-400">No active candidates found.</p>
             ) : (
-              <select
-                value={selectedKey}
-                onChange={(e) => setSelectedKey(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
-              >
-                <option value="">Select a candidate...</option>
-                {candidates.map((c) => (
-                  <option key={`${c.id}::${c.jobShortcode}`} value={`${c.id}::${c.jobShortcode}`}>
-                    {c.name} — {c.jobTitle} — {c.stage}
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) => {
+                      setSearch(e.target.value);
+                      if (selectedKey) setSelectedKey("");
+                    }}
+                    placeholder="Search by name, role, or stage…"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  />
+                  {(search || selectedKey) && (
+                    <button
+                      onClick={clearSelection}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg leading-none"
+                      aria-label="Clear"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+
+                {search && !selectedKey && filteredCandidates.length > 0 && (
+                  <ul className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    {filteredCandidates.map((c) => (
+                      <li key={`${c.id}::${c.jobShortcode}`}>
+                        <button
+                          onClick={() => selectCandidate(c)}
+                          className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-0"
+                        >
+                          <span className="block font-medium text-sm text-gray-900">{c.name}</span>
+                          <span className="block text-xs text-gray-500 mt-0.5">
+                            {c.jobTitle} · {c.stage}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {search && !selectedKey && filteredCandidates.length === 0 && (
+                  <p className="text-sm text-gray-400 mt-2">No candidates match your search.</p>
+                )}
+              </div>
             )}
           </div>
 

@@ -94,6 +94,8 @@ model HiringBrief {
   jdFrench             String?        @db.Text
   jdGeneratedAt        DateTime?
 
+  archivedAt           DateTime?
+
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
 
@@ -125,8 +127,15 @@ model CandidateCache {
   aiVetScore          Int?
   aiVetStatus         String?
   aiVetSummary        String?  @db.Text
+  aiVetRationale      String?  @db.Text
   aiVetQuestions      String[]
   aiVetRunAt          DateTime?
+
+  isSilverMedalist    Boolean  @default(false)
+  silverMedalistNote  String?
+
+  country             String?
+  city                String?
 
   briefId             String?
   brief               HiringBrief? @relation(fields: [briefId], references: [id])

@@ -3,6 +3,7 @@ import { getCandidatesForJob, getCandidate, getJob } from "@/lib/integrations/wo
 import { generateJson } from "@/lib/integrations/gemini";
 import { RESUME_VET_SYSTEM_PROMPT, buildVetPrompt } from "@/lib/prompts/resume-vet";
 import { prisma } from "@/lib/utils/prisma";
+import { postStarCandidateAlert } from "@/lib/integrations/slack";
 
 export const vetAllCandidates = inngest.createFunction(
   {
@@ -74,11 +75,12 @@ export const vetAllCandidates = inngest.createFunction(
           status: string;
           score: number;
           summary: string;
+          scoreRationale?: string;
           aPlayerSignals: Record<string, string>;
           suggestedInterviewQuestions: string[];
         }>(RESUME_VET_SYSTEM_PROMPT, prompt);
 
-        await prisma.candidateCache.upsert({
+        const cached = await prisma.candidateCache.upsert({
           where: { workableCandidateId: candidate.id },
           create: {
             workableCandidateId: candidate.id,
@@ -89,9 +91,12 @@ export const vetAllCandidates = inngest.createFunction(
             appliedAt: new Date(fullCandidate.created_at),
             resumeUrl: fullCandidate.resume_url ?? null,
             linkedinUrl: fullCandidate.linkedin_url ?? null,
+            country: fullCandidate.location?.country ?? null,
+            city: fullCandidate.location?.city ?? null,
             aiVetScore: result.score,
             aiVetStatus: result.status,
             aiVetSummary: result.summary,
+            aiVetRationale: result.scoreRationale ?? null,
             aiVetQuestions: result.suggestedInterviewQuestions ?? [],
             aiVetRunAt: new Date(),
             briefId: brief?.id ?? null,
@@ -100,11 +105,23 @@ export const vetAllCandidates = inngest.createFunction(
             aiVetScore: result.score,
             aiVetStatus: result.status,
             aiVetSummary: result.summary,
+            aiVetRationale: result.scoreRationale ?? null,
             aiVetQuestions: result.suggestedInterviewQuestions ?? [],
             aiVetRunAt: new Date(),
             currentStage: fullCandidate.stage.name,
+            country: fullCandidate.location?.country ?? null,
+            city: fullCandidate.location?.city ?? null,
           },
         });
+
+        if ((cached.aiVetScore ?? 0) >= 80) {
+          await postStarCandidateAlert({
+            candidateName: fullCandidate.name,
+            roleTitle,
+            score: cached.aiVetScore!,
+            shortcode,
+          }).catch(() => undefined);
+        }
 
         vetted++;
       });

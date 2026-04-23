@@ -20,6 +20,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <NavLink href="/briefs">Briefs</NavLink>
               <NavLink href="/postings">Active Postings</NavLink>
               <NavLink href="/evaluate">Evaluate</NavLink>
+              <NavLink href="/silver-medalists">Silver Medalists</NavLink>
+              <NavLink href="/reports/geo">Reports</NavLink>
               {session.user.role === "ADMIN" && (
                 <NavLink href="/admin/users">Admin</NavLink>
               )}
