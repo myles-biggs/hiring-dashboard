@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next"
 import { Inter_Tight, DM_Sans } from "next/font/google"
+import { ThemeProvider, ThemeScript, ToastProvider } from "@levelinteractive/ui"
 import "./globals.css"
 
 // Level Agency Brand Typography
@@ -48,7 +49,16 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning className={`${interTight.variable} ${dmSans.variable}`}>
-      <body className="min-h-full flex flex-col antialiased">{children}</body>
+      <head>
+        <ThemeScript />
+      </head>
+      <body className="font-body min-h-full flex flex-col antialiased">
+        <ThemeProvider defaultTheme="system">
+          <ToastProvider>
+            {children}
+          </ToastProvider>
+        </ThemeProvider>
+      </body>
     </html>
   )
 }

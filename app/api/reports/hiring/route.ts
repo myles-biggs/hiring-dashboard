@@ -93,11 +93,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Geo
-    for (const c of active) {
-      const country = c.location?.country ?? "Unknown";
-      countryCounts[country] = (countryCounts[country] ?? 0) + 1;
-    }
+    // Geo — intentionally skipped here; populated from CandidateCache below
 
     const topTags = Object.entries(jobTagCounts)
       .sort((a, b) => b[1] - a[1])
@@ -126,19 +122,7 @@ export async function GET(req: NextRequest) {
     .slice(0, 50)
     .map(([tag, count]) => ({ tag, count }));
 
-  // Geo breakdown
-  let canada = 0;
-  let usa = 0;
-  let other = 0;
-  for (const [country, count] of Object.entries(countryCounts)) {
-    const bucket = classifyCountry(country);
-    if (bucket === "canada") canada += count;
-    else if (bucket === "usa") usa += count;
-    else other += count;
-  }
-  const byCountry = Object.entries(countryCounts)
-    .sort((a, b) => b[1] - a[1])
-    .map(([country, count]) => ({ country, count }));
+  // Geo breakdown computed after Prisma fetch (see below)
 
   // ── Google Calendar ───────────────────────────────────────────────────────────
 
@@ -176,6 +160,7 @@ export async function GET(req: NextRequest) {
     briefsByDeptRaw,
     vettedCandidates,
     evaluationsInRange,
+    geoCandidates,
   ] = await Promise.all([
     prisma.hiringBrief.count(),
     prisma.hiringBrief.count({ where: { approvalStatus: "PENDING" } }),
@@ -187,15 +172,37 @@ export async function GET(req: NextRequest) {
     prisma.candidateEvaluation.count({
       where: { createdAt: { gte: from, lte: to } },
     }),
+    prisma.candidateCache.findMany({
+      select: { country: true },
+    }),
   ]);
 
   const totalVetted = vettedCandidates.length;
   const scoreSum = vettedCandidates.reduce((acc, c) => acc + (c.aiVetScore ?? 0), 0);
   const avgScore = totalVetted > 0 ? Math.round(scoreSum / totalVetted) : 0;
   const qualifiedCount = vettedCandidates.filter(
-    (c) => c.aiVetStatus === "QUALIFIED" || c.aiVetStatus === "qualified"
+    (c) => c.aiVetStatus?.toLowerCase() === "qualified"
   ).length;
   const silverMedalists = vettedCandidates.filter((c) => c.isSilverMedalist).length;
+
+  // Geo breakdown — sourced from CandidateCache (populated during AI vetting)
+  for (const c of geoCandidates) {
+    const country = c.country ?? "Unknown";
+    countryCounts[country] = (countryCounts[country] ?? 0) + 1;
+  }
+
+  let canada = 0;
+  let usa = 0;
+  let other = 0;
+  for (const [country, count] of Object.entries(countryCounts)) {
+    const bucket = classifyCountry(country);
+    if (bucket === "canada") canada += count;
+    else if (bucket === "usa") usa += count;
+    else other += count;
+  }
+  const byCountry = Object.entries(countryCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([country, count]) => ({ country, count }));
 
   const briefsByDepartment = briefsByDeptRaw.map((row) => ({
     department: row.department,
