@@ -52,6 +52,8 @@ export async function GET(req: NextRequest) {
 
   const tagCounts: Record<string, number> = {};
   const countryCounts: Record<string, number> = {};
+  // candidateId -> country from Workable list endpoint (fallback for unvetted)
+  const workableGeoMap: Record<string, string> = {};
 
   const jobReports = [];
   let totalApplications = 0;
@@ -93,7 +95,11 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Geo — intentionally skipped here; populated from CandidateCache below
+    // Geo — store per-candidate country from Workable list endpoint
+    for (const c of active) {
+      const country = c.location?.country ?? null;
+      if (country) workableGeoMap[c.id] = country;
+    }
 
     const topTags = Object.entries(jobTagCounts)
       .sort((a, b) => b[1] - a[1])
@@ -173,7 +179,7 @@ export async function GET(req: NextRequest) {
       where: { createdAt: { gte: from, lte: to } },
     }),
     prisma.candidateCache.findMany({
-      select: { country: true },
+      select: { workableCandidateId: true, country: true },
     }),
   ]);
 
@@ -185,9 +191,15 @@ export async function GET(req: NextRequest) {
   ).length;
   const silverMedalists = vettedCandidates.filter((c) => c.isSilverMedalist).length;
 
-  // Geo breakdown — sourced from CandidateCache (populated during AI vetting)
+  // Geo breakdown — merge Workable list data with CandidateCache.
+  // CandidateCache overrides Workable for vetted candidates (more reliable country codes).
+  // Build a final per-candidate map: start with Workable, override with cache.
+  const cacheGeoMap: Record<string, string> = {};
   for (const c of geoCandidates) {
-    const country = c.country ?? "Unknown";
+    if (c.country) cacheGeoMap[c.workableCandidateId] = c.country;
+  }
+  const finalGeoMap = { ...workableGeoMap, ...cacheGeoMap };
+  for (const country of Object.values(finalGeoMap)) {
     countryCounts[country] = (countryCounts[country] ?? 0) + 1;
   }
 
