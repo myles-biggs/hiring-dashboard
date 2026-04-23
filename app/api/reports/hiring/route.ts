@@ -199,6 +199,9 @@ export async function GET(req: NextRequest) {
     if (c.country) cacheGeoMap[c.workableCandidateId] = c.country;
   }
   const finalGeoMap = { ...workableGeoMap, ...cacheGeoMap };
+  console.log("[geo-debug] workableGeoMap sample:", Object.entries(workableGeoMap).slice(0, 5));
+  console.log("[geo-debug] cacheGeoMap sample:", Object.entries(cacheGeoMap).slice(0, 5));
+  console.log("[geo-debug] finalGeoMap size:", Object.keys(finalGeoMap).length);
   for (const country of Object.values(finalGeoMap)) {
     countryCounts[country] = (countryCounts[country] ?? 0) + 1;
   }
