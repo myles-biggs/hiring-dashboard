@@ -1,5 +1,5 @@
 import { inngest } from "./client";
-import { getCandidatesForJob, getCandidate, getJob } from "@/lib/integrations/workable";
+import { getCandidatesForJob, getCandidate, getJob, getJobs } from "@/lib/integrations/workable";
 import { generateJson } from "@/lib/integrations/gemini";
 import { RESUME_VET_SYSTEM_PROMPT, buildVetPrompt } from "@/lib/prompts/resume-vet";
 import { prisma } from "@/lib/utils/prisma";
@@ -128,5 +128,93 @@ export const vetAllCandidates = inngest.createFunction(
     }
 
     return { vetted, skipped: vettedIds.size };
+  }
+);
+
+// Batch size for parallel Workable detail fetches
+const GEO_BATCH_SIZE = 10;
+
+export const syncCandidateLocations = inngest.createFunction(
+  {
+    id: "sync-candidate-locations",
+    triggers: [
+      { cron: "0 2 * * *" },
+      { event: "hiring/sync-locations.requested" },
+    ],
+    timeouts: { finish: "20m" },
+  },
+  async ({ step }: { step: import("inngest").GetStepTools<typeof inngest> }) => {
+    const jobs = await step.run("fetch-active-jobs", () => getJobs());
+    const activeJobs = jobs.filter((j) => j.state === "published");
+
+    let totalSynced = 0;
+    let totalSkipped = 0;
+
+    for (const job of activeJobs) {
+      const candidates = await step.run(`fetch-candidates-${job.shortcode}`, () =>
+        getCandidatesForJob(job.shortcode)
+      );
+      const activeIds = candidates.filter((c) => !c.disqualified).map((c) => c.id);
+
+      const cached = await step.run(`check-cache-${job.shortcode}`, () =>
+        prisma.candidateCache.findMany({
+          where: { workableCandidateId: { in: activeIds } },
+          select: { workableCandidateId: true, country: true },
+        })
+      );
+
+      const cachedWithCountry = new Set(
+        cached.filter((c) => c.country).map((c) => c.workableCandidateId)
+      );
+      const needsSync = activeIds.filter((id) => !cachedWithCountry.has(id));
+      totalSkipped += cachedWithCountry.size;
+
+      for (let i = 0; i < needsSync.length; i += GEO_BATCH_SIZE) {
+        const batch = needsSync.slice(i, i + GEO_BATCH_SIZE);
+        const batchIndex = Math.floor(i / GEO_BATCH_SIZE);
+
+        await step.run(`sync-geo-${job.shortcode}-batch-${batchIndex}`, async () => {
+          const results = await Promise.allSettled(batch.map((id) => getCandidate(id)));
+
+          for (const result of results) {
+            if (result.status !== "fulfilled") continue;
+            const c = result.value;
+            const country = c.location?.country ?? null;
+            const city = c.location?.city ?? null;
+
+            const existing = cached.find((r) => r.workableCandidateId === c.id);
+            if (existing) {
+              await prisma.candidateCache.update({
+                where: { workableCandidateId: c.id },
+                data: { country, city },
+              });
+            } else {
+              // Candidate exists in Workable but not yet in cache — create minimal row
+              const source = candidates.find((r) => r.id === c.id);
+              if (!source) return;
+              await prisma.candidateCache.upsert({
+                where: { workableCandidateId: c.id },
+                create: {
+                  workableCandidateId: c.id,
+                  workableJobId: job.shortcode,
+                  name: c.name,
+                  email: c.email,
+                  currentStage: source.stage?.name ?? "Applied",
+                  appliedAt: new Date(c.created_at),
+                  resumeUrl: c.resume_url ?? null,
+                  linkedinUrl: c.linkedin_url ?? null,
+                  country,
+                  city,
+                },
+                update: { country, city },
+              });
+            }
+            totalSynced++;
+          }
+        });
+      }
+    }
+
+    return { synced: totalSynced, skipped: totalSkipped };
   }
 );
