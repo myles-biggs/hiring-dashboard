@@ -73,7 +73,7 @@ export async function getJob(shortcode: string): Promise<WorkableJob> {
 
 export async function getCandidatesForJob(jobShortcode: string): Promise<WorkableCandidate[]> {
   const data = await workableFetch<{ candidates: (Omit<WorkableCandidate, "stage"> & { stage: WorkableCandidate["stage"] | string })[] }>(
-    `/jobs/${jobShortcode}/candidates?fields=location`
+    `/jobs/${jobShortcode}/candidates`
   );
   // Workable list endpoint returns stage as a plain string; normalize to object
   return data.candidates.map((c) => ({

@@ -1,5 +1,5 @@
 import { authOptions } from "@/lib/auth/config";
-import { getJobs, getCandidatesForJob } from "@/lib/integrations/workable";
+import { getJobs, getCandidatesForJob, getCandidate } from "@/lib/integrations/workable";
 import { prisma } from "@/lib/utils/prisma";
 import { google } from "googleapis";
 import { getServerSession } from "next-auth";
@@ -52,8 +52,8 @@ export async function GET(req: NextRequest) {
 
   const tagCounts: Record<string, number> = {};
   const countryCounts: Record<string, number> = {};
-  // candidateId -> country from Workable list endpoint (fallback for unvetted)
-  const workableGeoMap: Record<string, string> = {};
+  // all active candidate IDs across all jobs (for geo enrichment)
+  const allActiveCandidateIds: string[] = [];
 
   const jobReports = [];
   let totalApplications = 0;
@@ -95,11 +95,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Geo — store per-candidate country from Workable list endpoint
-    for (const c of active) {
-      const country = c.location?.country ?? null;
-      if (country) workableGeoMap[c.id] = country;
-    }
+    for (const c of active) allActiveCandidateIds.push(c.id);
 
     const topTags = Object.entries(jobTagCounts)
       .sort((a, b) => b[1] - a[1])
@@ -191,17 +187,26 @@ export async function GET(req: NextRequest) {
   ).length;
   const silverMedalists = vettedCandidates.filter((c) => c.isSilverMedalist).length;
 
-  // Geo breakdown — merge Workable list data with CandidateCache.
-  // CandidateCache overrides Workable for vetted candidates (more reliable country codes).
-  // Build a final per-candidate map: start with Workable, override with cache.
-  const cacheGeoMap: Record<string, string> = {};
+  // Geo breakdown — seed from CandidateCache, then enrich uncached candidates
+  // via parallel Workable detail fetches (Workable list endpoint has no location data).
+  const finalGeoMap: Record<string, string> = {};
   for (const c of geoCandidates) {
-    if (c.country) cacheGeoMap[c.workableCandidateId] = c.country;
+    if (c.country) finalGeoMap[c.workableCandidateId] = c.country;
   }
-  const finalGeoMap = { ...workableGeoMap, ...cacheGeoMap };
-  console.log("[geo-debug] workableGeoMap sample:", Object.entries(workableGeoMap).slice(0, 5));
-  console.log("[geo-debug] cacheGeoMap sample:", Object.entries(cacheGeoMap).slice(0, 5));
-  console.log("[geo-debug] finalGeoMap size:", Object.keys(finalGeoMap).length);
+
+  const uncachedIds = allActiveCandidateIds.filter((id) => !finalGeoMap[id]);
+  const CONCURRENCY = 10;
+  for (let i = 0; i < uncachedIds.length; i += CONCURRENCY) {
+    const batch = uncachedIds.slice(i, i + CONCURRENCY);
+    const results = await Promise.allSettled(batch.map((id) => getCandidate(id)));
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        const country = result.value.location?.country ?? null;
+        if (country) finalGeoMap[result.value.id] = country;
+      }
+    }
+  }
+
   for (const country of Object.values(finalGeoMap)) {
     countryCounts[country] = (countryCounts[country] ?? 0) + 1;
   }
