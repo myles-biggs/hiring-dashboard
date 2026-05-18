@@ -1,0 +1,36 @@
+// ─── Interview Transcript ─────────────────────────────────────────────────────
+
+model InterviewTranscript {
+  id              String      @id @default(cuid())
+  candidateId     String
+  candidate       Candidate   @relation(fields: [candidateId], references: [id])
+
+  zoomMeetingId   String
+  recordingFileId String
+  meetingDate     DateTime
+  hostEmail       String
+  matchMethod     MatchMethod
+
+  rawText         String      @db.Text
+  processed       Boolean     @default(false)
+  processedAt     DateTime?
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([candidateId])
+  @@index([zoomMeetingId])
+}
+
+enum MatchMethod {
+  PARTICIPANT_EMAIL
+  MEETING_TOPIC
+}
+
+model UnmatchedTranscript {
+  id            String   @id @default(cuid())
+  zoomMeetingId String
+  meetingDate   DateTime
+  rawPayload    Json
+  createdAt     DateTime @default(now())
+}

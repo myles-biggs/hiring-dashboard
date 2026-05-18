@@ -181,3 +181,23 @@ export function verifyWebhookToken(token: string | null): boolean {
   if (!expected || !token) return false;
   return token === expected;
 }
+
+export async function setCandidateStarRating(
+  candidateId: string,
+  starRating: number
+): Promise<void> {
+  await workableFetch(`/candidates/${candidateId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ candidate: { rating: starRating } }),
+  });
+}
+
+export async function addCandidateComment(
+  candidateId: string,
+  comment: string
+): Promise<void> {
+  await workableFetch(`/candidates/${candidateId}/activities`, {
+    method: "POST",
+    body: JSON.stringify({ action: "comment", body: comment }),
+  });
+}

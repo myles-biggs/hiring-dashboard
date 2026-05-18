@@ -1,0 +1,26 @@
+// ─── Candidate ────────────────────────────────────────────────────────────────
+
+model Candidate {
+  id                   String   @id @default(cuid())
+  workableCandidateId  String   @unique
+  workableJobId        String
+  name                 String
+  email                String
+  currentStage         String
+  appliedAt            DateTime
+
+  resumeUrl            String?
+  linkedinUrl          String?
+
+  starRating           Int?
+
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  evaluations          Evaluation[]
+  dispositions         Disposition[]
+  transcripts          InterviewTranscript[]
+
+  @@index([workableJobId])
+  @@index([email])
+}

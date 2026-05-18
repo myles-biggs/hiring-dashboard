@@ -1,0 +1,31 @@
+// ─── Disposition ──────────────────────────────────────────────────────────────
+
+model Disposition {
+  id                String            @id @default(cuid())
+  candidateId       String
+  candidate         Candidate         @relation(fields: [candidateId], references: [id])
+
+  status            DispositionStatus
+  recommendedAction RecommendedAction
+  approvedByEmail   String?
+  approvedAt        DateTime?
+  notes             String?           @db.Text
+
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@index([candidateId])
+}
+
+enum DispositionStatus {
+  RECOMMENDED
+  APPROVED
+  REJECTED
+}
+
+enum RecommendedAction {
+  ADVANCE
+  HOLD
+  REJECT
+  STRONG_ADVANCE
+}

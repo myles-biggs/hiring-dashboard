@@ -1,0 +1,33 @@
+// ─── Evaluation ───────────────────────────────────────────────────────────────
+
+model Evaluation {
+  id               String         @id @default(cuid())
+  candidateId      String
+  candidate        Candidate      @relation(fields: [candidateId], references: [id])
+
+  type             EvaluationType
+  sources          EvalSource[]
+  modelUsed        String
+  promptVersion    String
+
+  rawOutput        String         @db.Text
+  dimensionScores  Json
+  totalScore       Int
+  starRating       Int
+
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([candidateId])
+}
+
+enum EvaluationType {
+  CULTURE_FIT
+  JOB_POSTING_FIT
+}
+
+enum EvalSource {
+  TRANSCRIPT
+  RESUME
+  APPLICATION
+}
