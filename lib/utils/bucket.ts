@@ -20,7 +20,7 @@ export function cultureBucket(score: number): CultureBucket {
   return "WEAK";
 }
 
-// TODO: verify full matrix against spec
+// Disposition action matrix — source of truth: .specify/specs/hiring-app-spec.md
 export function recommendedAction(args: {
   jdBucket: JdBucket;
   cultureBucket: CultureBucket | null;
@@ -30,34 +30,34 @@ export function recommendedAction(args: {
   if (jdBucket === "PASS") {
     return {
       action: "DISQUALIFY",
-      reason: "Candidate does not meet job posting fit threshold.",
+      reason: "Insufficient role fit. Disqualify for this role, retain in database.",
     };
   }
 
   if (jdBucket === "STRONG") {
     if (cb === "STRONG") {
-      return { action: "ADVANCE", reason: "Strong fit on both job posting and culture dimensions." };
+      return { action: "ADVANCE", reason: "High alignment on role + culture. Move to offer track." };
     }
     if (cb === "POSSIBLE") {
-      return { action: "SCHEDULE_INTERVIEW", reason: "Strong job fit with moderate culture alignment; schedule interview to assess further." };
+      return { action: "PANEL_REVIEW", reason: "Strong role fit, culture mixed. Bring panel for tiebreak." };
     }
     if (cb === "WEAK") {
-      return { action: "PANEL_REVIEW", reason: "Strong job fit but weak culture signal; escalate to panel review." };
+      return { action: "SECOND_OPINION", reason: "Strong role fit but culture concerns. Second TA review before reject." };
     }
     // cb === null
-    return { action: "SCHEDULE_INTERVIEW", reason: "Strong job fit; no culture data available — schedule interview." };
+    return { action: "SCHEDULE_INTERVIEW", reason: "Strong role fit, no culture data yet. Schedule first interview." };
   }
 
   // jdBucket === "POSSIBLE"
   if (cb === "STRONG") {
-    return { action: "SCHEDULE_INTERVIEW", reason: "Strong culture fit with possible job fit; schedule interview to assess role alignment." };
+    return { action: "ADVANCE", reason: "Strong culture compensates for partial role fit. TA review." };
   }
   if (cb === "POSSIBLE") {
-    return { action: "SECOND_OPINION", reason: "Moderate fit on both dimensions; request second opinion before advancing." };
+    return { action: "HOLD", reason: "Mixed on both axes. Hold for future role match." };
   }
   if (cb === "WEAK") {
-    return { action: "HOLD", reason: "Possible job fit but weak culture alignment; hold for later review." };
+    return { action: "DISQUALIFY", reason: "Partial role fit, culture concerns. Disqualify for this role." };
   }
   // cb === null
-  return { action: "SECOND_OPINION", reason: "Possible job fit with no culture data; request second opinion." };
+  return { action: "SCHEDULE_INTERVIEW", reason: "Partial role fit. Worth a screen to gather culture signal." };
 }
