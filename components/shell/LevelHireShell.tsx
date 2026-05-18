@@ -17,10 +17,11 @@ import {
   Medal,
   BarChart2,
   Settings,
+  PenLine,
 } from "lucide-react"
 import type { ReactNode } from "react"
 
-const NAV_ITEMS: LevelAppShellProps["primaryNavItems"] = [
+const BASE_NAV_ITEMS: LevelAppShellProps["primaryNavItems"] = [
   {
     id: "dashboard",
     label: "Dashboard",
@@ -59,6 +60,13 @@ const NAV_ITEMS: LevelAppShellProps["primaryNavItems"] = [
   },
 ]
 
+const GENERATE_JOB_POST_NAV_ITEM: LevelAppShellProps["primaryNavItems"][number] = {
+  id: "generate-job-post",
+  label: "Generate Job Post",
+  icon: <PenLine size={20} />,
+  href: "/job-posts/new",
+}
+
 const ADMIN_NAV_ITEM: LevelAppShellProps["primaryNavItems"][number] = {
   id: "admin",
   label: "Admin",
@@ -79,7 +87,14 @@ interface LevelHireShellProps {
 }
 
 export function LevelHireShell({ children, user, isAdmin }: LevelHireShellProps) {
-  const navItems = isAdmin ? [...NAV_ITEMS, ADMIN_NAV_ITEM] : NAV_ITEMS
+  const canGenerateJobPost =
+    user.role === "TALENT_ACQUISITION" || user.role === "ADMIN"
+
+  const navItems = [
+    ...BASE_NAV_ITEMS,
+    ...(canGenerateJobPost ? [GENERATE_JOB_POST_NAV_ITEM] : []),
+    ...(isAdmin ? [ADMIN_NAV_ITEM] : []),
+  ]
 
   return (
     <LevelAppShell
