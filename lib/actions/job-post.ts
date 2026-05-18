@@ -1,7 +1,7 @@
 "use server";
 
 import { generateJson } from "@/lib/integrations/gemini";
-import { createJob } from "@/lib/integrations/workable";
+import { createDraftJob } from "@/lib/integrations/workable";
 import {
   JOB_POST_SYSTEM_PROMPT,
   buildStandaloneJobPostPrompt,
@@ -35,13 +35,11 @@ export async function pushDraftToWorkable(payload: {
   descriptionFrench: string;
   department?: string;
 }): Promise<{ draftUrl: string }> {
-  // TODO: switch to createDraftJob once Phase 2A merges
-  const { shortcode } = await createJob({
+  const { shortcode } = await createDraftJob({
     title: payload.title,
     department: payload.department ?? "General",
+    description: payload.description,
     employmentType: "Full-time",
-    descriptionEnglish: payload.description,
-    descriptionFrench: payload.descriptionFrench,
   });
 
   const subdomain = process.env.WORKABLE_SUBDOMAIN;

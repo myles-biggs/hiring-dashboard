@@ -3,7 +3,7 @@
 import { authOptions } from "@/lib/auth/config";
 import { AuthError } from "@/lib/auth/roles";
 import { generateStructured, CLAUDE_MODEL } from "@/lib/integrations/claude";
-import { addCandidateComment, setCandidateStarRating } from "@/lib/integrations/workable";
+import { addCandidateComment, setCandidateStarRating, updateCandidateCustomFields } from "@/lib/integrations/workable";
 import { buildCulturePrompt, CULTURE_PROMPT_VERSION } from "@/lib/prompts/culture-eval";
 import { cultureFitOutputSchema } from "@/lib/schemas/evaluation";
 import { cultureBucket, jobPostingBucket, recommendedAction } from "@/lib/utils/bucket";
@@ -92,6 +92,10 @@ export async function evaluateTranscript(
   }
 
   const starRating = result.starRating as 1 | 2 | 3 | 4 | 5;
+  const dimensionBreakdown = Object.entries(result.dimensionScores)
+    .map(([k, v]) => `${k}: ${v}/5`)
+    .join("\n");
+
   await Promise.allSettled([
     setCandidateStarRating(candidate.workableCandidateId, starRating),
     addCandidateComment(
@@ -100,6 +104,14 @@ export async function evaluateTranscript(
         `Culture Fit: ${"★".repeat(result.starRating)}${"☆".repeat(5 - result.starRating)} (${result.totalScore}/40)\n\n` +
         result.rationale
     ),
+    updateCandidateCustomFields(candidate.workableCandidateId, {
+      culture_score: result.totalScore,
+      culture_eval_source: "Transcript",
+      culture_eval_notes: `${dimensionBreakdown}\n\n${result.rationale}`,
+      recommended_action: recAction,
+      recommendation_rationale: recReason,
+      evaluated_at: new Date().toISOString(),
+    }),
   ]);
 
   await prisma.interviewTranscript.update({
