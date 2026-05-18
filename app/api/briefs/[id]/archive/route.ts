@@ -1,3 +1,4 @@
+import { isBriefFlowEnabled } from "@/lib/utils/feature-flags";
 import { authOptions } from "@/lib/auth/config";
 import { requireRole, AuthError } from "@/lib/auth/roles";
 import { prisma } from "@/lib/utils/prisma";
@@ -6,8 +7,12 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(
   _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  {params }: { params: Promise<{ id: string }> }
 ) {
+  if (!isBriefFlowEnabled()) {
+    return NextResponse.json({ error: "Brief flow disabled" }, { status: 410 });
+  }
+
   const session = await getServerSession(authOptions);
 
   try {

@@ -1,3 +1,4 @@
+import { isBriefFlowEnabled } from "@/lib/utils/feature-flags";
 import { authOptions } from "@/lib/auth/config";
 import { createBriefTask } from "@/lib/integrations/asana";
 import { postBriefApprovalRequest } from "@/lib/integrations/slack";
@@ -7,6 +8,10 @@ import { getServerSession } from "next-auth";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
+  if (!isBriefFlowEnabled()) {
+    return NextResponse.json({ error: "Brief flow disabled" }, { status: 410 });
+  }
+
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 

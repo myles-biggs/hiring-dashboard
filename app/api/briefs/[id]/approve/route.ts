@@ -1,3 +1,4 @@
+import { isBriefFlowEnabled } from "@/lib/utils/feature-flags";
 import { authOptions } from "@/lib/auth/config";
 import { updateApprovalStatus } from "@/lib/integrations/asana";
 import { requireApprover, AuthError } from "@/lib/auth/roles";
@@ -14,8 +15,12 @@ const approveSchema = z.object({
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  {params }: { params: Promise<{ id: string }> }
 ) {
+  if (!isBriefFlowEnabled()) {
+    return NextResponse.json({ error: "Brief flow disabled" }, { status: 410 });
+  }
+
   const session = await getServerSession(authOptions);
 
   try {

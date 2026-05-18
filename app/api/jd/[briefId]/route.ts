@@ -1,3 +1,4 @@
+import { isBriefFlowEnabled } from "@/lib/utils/feature-flags";
 export const maxDuration = 60;
 
 import { authOptions } from "@/lib/auth/config";
@@ -11,8 +12,12 @@ import { z } from "zod";
 
 export async function POST(
   _req: NextRequest,
-  { params }: { params: Promise<{ briefId: string }> }
+  {params }: { params: Promise<{ briefId: string }> }
 ) {
+  if (!isBriefFlowEnabled()) {
+    return NextResponse.json({ error: "Brief flow disabled" }, { status: 410 });
+  }
+
   const session = await getServerSession(authOptions);
 
   try {

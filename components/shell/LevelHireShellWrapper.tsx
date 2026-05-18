@@ -32,11 +32,12 @@ interface LevelHireShellWrapperProps {
     role?: string
   }
   isAdmin: boolean
+  enableBriefFlow: boolean
 }
 
-export function LevelHireShellWrapper({ children, user, isAdmin }: LevelHireShellWrapperProps) {
+export function LevelHireShellWrapper({ children, user, isAdmin, enableBriefFlow }: LevelHireShellWrapperProps) {
   return (
-    <Shell user={user} isAdmin={isAdmin}>
+    <Shell user={user} isAdmin={isAdmin} enableBriefFlow={enableBriefFlow}>
       {children}
     </Shell>
   )

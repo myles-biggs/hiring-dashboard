@@ -1,3 +1,4 @@
+import { isBriefFlowEnabled } from "@/lib/utils/feature-flags";
 import { prisma } from "@/lib/utils/prisma";
 import { ApprovalStatus } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
@@ -10,6 +11,10 @@ const APPROVAL_STATUS_MAP: Record<string, ApprovalStatus> = {
 };
 
 export async function POST(req: NextRequest) {
+  if (!isBriefFlowEnabled()) {
+    return NextResponse.json({ error: "Brief flow disabled" }, { status: 410 });
+  }
+
   // Asana sends a handshake on webhook registration — respond with the secret
   const handshakeSecret = req.headers.get("x-hook-secret");
   if (handshakeSecret) {

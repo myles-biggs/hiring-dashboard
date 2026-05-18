@@ -1,4 +1,5 @@
 import { authOptions } from "@/lib/auth/config"
+import { isBriefFlowEnabled } from "@/lib/utils/feature-flags"
 import { getServerSession } from "next-auth"
 import { redirect } from "next/navigation"
 import { SessionProvider } from "@/components/shared/SessionProvider"
@@ -18,7 +19,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <SessionProvider session={session}>
-      <LevelHireShellWrapper user={user} isAdmin={session.user.role === "ADMIN"}>
+      <LevelHireShellWrapper
+        user={user}
+        isAdmin={session.user.role === "ADMIN"}
+        enableBriefFlow={isBriefFlowEnabled()}
+      >
         {children}
       </LevelHireShellWrapper>
     </SessionProvider>

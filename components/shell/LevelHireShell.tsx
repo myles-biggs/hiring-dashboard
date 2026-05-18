@@ -84,14 +84,15 @@ interface LevelHireShellProps {
     role?: string
   }
   isAdmin: boolean
+  enableBriefFlow: boolean
 }
 
-export function LevelHireShell({ children, user, isAdmin }: LevelHireShellProps) {
+export function LevelHireShell({ children, user, isAdmin, enableBriefFlow }: LevelHireShellProps) {
   const canGenerateJobPost =
     user.role === "TALENT_ACQUISITION" || user.role === "ADMIN"
 
   const navItems = [
-    ...BASE_NAV_ITEMS,
+    ...BASE_NAV_ITEMS.filter((item) => item.id !== "briefs" || enableBriefFlow),
     ...(canGenerateJobPost ? [GENERATE_JOB_POST_NAV_ITEM] : []),
     ...(isAdmin ? [ADMIN_NAV_ITEM] : []),
   ]
