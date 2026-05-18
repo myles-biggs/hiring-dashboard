@@ -9,6 +9,7 @@
  */
 
 import { LevelAppShell, type LevelAppShellProps } from "@levelinteractive/ui"
+import { signOut } from "next-auth/react"
 import {
   LayoutDashboard,
   FileText,
@@ -104,6 +105,7 @@ export function LevelHireShell({ children, user, isAdmin, enableBriefFlow }: Lev
       primaryNavItems={navItems}
       modulesWithSecondaryNav={[]}
       standaloneMode={true}
+      onSignOut={() => signOut({ callbackUrl: "/login" })}
     >
       {children}
     </LevelAppShell>
