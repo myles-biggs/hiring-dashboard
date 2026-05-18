@@ -20,7 +20,7 @@ export const authOptions: NextAuthOptions = {
           where: { id: user.id },
           select: { role: true, isApprover: true },
         });
-        session.user.role = dbUser?.role ?? Role.HIRING_MANAGER;
+        session.user.role = dbUser?.role ?? Role.VIEWER;
         session.user.isApprover = dbUser?.isApprover ?? false;
       }
       return session;
@@ -39,11 +39,6 @@ export const authOptions: NextAuthOptions = {
         .filter(Boolean);
 
       const newTaEmails = (process.env.TA_EMAILS ?? "")
-        .split(",")
-        .map((e) => e.trim())
-        .filter(Boolean);
-
-      const viewerEmails = (process.env.VIEWER_EMAILS ?? "")
         .split(",")
         .map((e) => e.trim())
         .filter(Boolean);

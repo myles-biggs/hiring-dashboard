@@ -103,6 +103,10 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
+  if (!isBriefFlowEnabled()) {
+    return NextResponse.json({ error: "Brief flow disabled" }, { status: 410 });
+  }
+
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
