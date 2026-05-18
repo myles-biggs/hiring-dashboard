@@ -181,3 +181,179 @@ export function verifyWebhookToken(token: string | null): boolean {
   if (!expected || !token) return false;
   return token === expected;
 }
+
+// ─── HMAC-SHA256 webhook signature verification ───────────────────────────────
+
+export async function verifyWebhookSignature(
+  rawBody: string,
+  signatureHeader: string | null
+): Promise<boolean> {
+  const secret = process.env.WORKABLE_WEBHOOK_SECRET;
+  if (!secret || !signatureHeader) return false;
+
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+
+  const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(rawBody));
+  const computed = Buffer.from(sig).toString("hex");
+  return computed === signatureHeader;
+}
+
+// ─── Paginated jobs ───────────────────────────────────────────────────────────
+
+type JobsPage = { jobs: WorkableJob[]; paging?: { next?: string } };
+
+export async function listPublishedJobs(): Promise<WorkableJob[]> {
+  const jobs: WorkableJob[] = [];
+  let nextPath: string | null = "/jobs?state=published&limit=50";
+
+  while (nextPath) {
+    const page: JobsPage = await workableFetch<JobsPage>(nextPath);
+    jobs.push(...page.jobs);
+    nextPath = page.paging?.next
+      ? new URL(page.paging.next).pathname + new URL(page.paging.next).search
+      : null;
+  }
+
+  return jobs;
+}
+
+// ─── Paginated candidates for a job ──────────────────────────────────────────
+
+export async function listCandidatesForJob(
+  shortcode: string,
+  since?: Date
+): Promise<WorkableCandidate[]> {
+  const candidates: WorkableCandidate[] = [];
+  const sinceParam = since ? `&created_after=${since.toISOString()}` : "";
+  let nextPath: string | null = `/jobs/${shortcode}/candidates?limit=50${sinceParam}`;
+
+  type RawCandidate = Omit<WorkableCandidate, "stage"> & {
+    stage: WorkableCandidate["stage"] | string;
+  };
+  type CandidatesPage = { candidates: RawCandidate[]; paging?: { next?: string } };
+
+  while (nextPath) {
+    const page: CandidatesPage = await workableFetch<CandidatesPage>(nextPath);
+    const normalized: WorkableCandidate[] = page.candidates.map(
+      (c: RawCandidate) => ({
+        ...c,
+        stage:
+          typeof c.stage === "string"
+            ? { name: c.stage, kind: "applied", position: 0 }
+            : c.stage,
+      })
+    );
+
+    candidates.push(...normalized);
+    nextPath = page.paging?.next
+      ? new URL(page.paging.next).pathname + new URL(page.paging.next).search
+      : null;
+  }
+
+  return candidates;
+}
+
+// ─── Candidate detail ─────────────────────────────────────────────────────────
+
+export interface WorkableCandidateDetail extends WorkableCandidate {
+  answers?: { question: string; answer?: string }[];
+  source?: { id?: string; name?: string };
+}
+
+export async function getCandidateDetail(
+  workableCandidateId: string
+): Promise<WorkableCandidateDetail> {
+  const data = await workableFetch<{ candidate: WorkableCandidateDetail }>(
+    `/candidates/${workableCandidateId}`
+  );
+  return data.candidate;
+}
+
+// ─── Custom fields ────────────────────────────────────────────────────────────
+
+export interface CandidateCustomFields {
+  jd_match_score?: number;
+  jd_match_bucket?: string;
+  jd_match_rationale?: string;
+  culture_score?: number;
+  culture_eval_source?: string;
+  culture_eval_notes?: string;
+  recommended_action?: string;
+  recommendation_rationale?: string;
+  evaluated_at?: string;
+}
+
+export async function updateCandidateCustomFields(
+  workableCandidateId: string,
+  fields: Partial<CandidateCustomFields>
+): Promise<void> {
+  const customFields = Object.entries(fields).map(([key, value]) => ({
+    field_key: key,
+    value: String(value ?? ""),
+  }));
+
+  await workableFetch(`/candidates/${workableCandidateId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ candidate: { custom_fields: customFields } }),
+  });
+}
+
+// ─── Draft job creation ───────────────────────────────────────────────────────
+
+export async function createDraftJob(payload: {
+  title: string;
+  department: string;
+  description: string;
+  employmentType: string;
+}): Promise<{ shortcode: string; id: string }> {
+  const employmentTypeMap: Record<string, string> = {
+    "Full-time": "full-time",
+    "Part-time": "part-time",
+  };
+
+  const result = await workableFetch<{ job: { shortcode: string; id: string } }>("/jobs", {
+    method: "POST",
+    body: JSON.stringify({
+      job: {
+        title: payload.title,
+        department: payload.department,
+        description: payload.description,
+        employment_type: employmentTypeMap[payload.employmentType] ?? "full-time",
+        state: "draft",
+      },
+    }),
+  });
+
+  return { shortcode: result.job.shortcode, id: result.job.id };
+}
+
+// ─── Star rating ──────────────────────────────────────────────────────────────
+
+export async function setCandidateStarRating(
+  workableCandidateId: string,
+  rating: 1 | 2 | 3 | 4 | 5
+): Promise<void> {
+  await workableFetch(`/candidates/${workableCandidateId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ candidate: { rating } }),
+  });
+}
+
+// ─── Candidate comment ────────────────────────────────────────────────────────
+
+export async function addCandidateComment(
+  workableCandidateId: string,
+  comment: string
+): Promise<void> {
+  await workableFetch(`/candidates/${workableCandidateId}/activities`, {
+    method: "POST",
+    body: JSON.stringify({ action: "comment", body: comment }),
+  });
+}

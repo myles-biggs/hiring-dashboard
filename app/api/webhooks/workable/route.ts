@@ -1,130 +1,73 @@
-import { generateText } from "@/lib/integrations/gemini";
-import { addCandidateNote, getJob, verifyWebhookToken } from "@/lib/integrations/workable";
-import { buildVetPrompt, RESUME_VET_SYSTEM_PROMPT } from "@/lib/prompts/resume-vet";
+import { vetCandidate } from "@/lib/actions/vet-candidate";
+import { verifyWebhookSignature, verifyWebhookToken } from "@/lib/integrations/workable";
+import { workableCandidateWebhookSchema } from "@/lib/schemas/candidate";
 import { prisma } from "@/lib/utils/prisma";
-import { WorkableWebhookPayload } from "@/types/workable";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
-  const token = req.nextUrl.searchParams.get("token");
-  if (!verifyWebhookToken(token)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const rawBody = await req.text();
 
-  let payload: WorkableWebhookPayload;
+  // Prefer HMAC-SHA256 signature when present; fall back to token in query string
+  const signatureHeader = req.headers.get("x-workable-signature");
+  if (signatureHeader) {
+    const valid = await verifyWebhookSignature(rawBody, signatureHeader);
+    if (!valid) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+  } else {
+    const token = req.nextUrl.searchParams.get("token");
+    if (!verifyWebhookToken(token)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+  }
+
+  let payload: unknown;
   try {
     payload = JSON.parse(rawBody);
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  if (payload.event_type !== "candidate_created") {
+  const parsed = workableCandidateWebhookSchema.safeParse(payload);
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+  }
+
+  if (parsed.data.event_type !== "candidate_created") {
     return NextResponse.json({ received: true });
   }
 
-  const candidate = payload.data.candidate;
-  if (!candidate) return NextResponse.json({ received: true });
+  const wc = parsed.data.data.candidate;
+  if (!wc) return NextResponse.json({ received: true });
 
-  // Upsert candidate cache
-  const cached = await prisma.candidateCache.upsert({
-    where: { workableCandidateId: candidate.id },
+  const stageName =
+    typeof wc.stage === "string" ? wc.stage : wc.stage.name;
+
+  const candidate = await prisma.candidate.upsert({
+    where: { workableCandidateId: wc.id },
     update: {
-      currentStage: candidate.stage.name,
+      currentStage: stageName,
       updatedAt: new Date(),
     },
     create: {
-      workableCandidateId: candidate.id,
-      workableJobId: candidate.job.id,
-      name: candidate.name,
-      email: candidate.email,
-      currentStage: candidate.stage.name,
-      appliedAt: new Date(candidate.created_at),
-      resumeUrl: candidate.resume_url,
-      linkedinUrl: candidate.linkedin_url,
+      workableCandidateId: wc.id,
+      workableJobShortcode: wc.job.shortcode,
+      workableJobTitle: wc.job.title,
+      name: wc.name,
+      email: wc.email,
+      currentStage: stageName,
+      appliedAt: new Date(wc.created_at),
+      resumeUrl: wc.resume_url ?? null,
+      linkedinUrl: wc.linkedin_url ?? null,
+      coverLetter: wc.cover_letter ?? null,
+      tags: wc.tags ?? [],
+      source: wc.source?.name ?? null,
+      applicationAnswers: wc.answers ? (wc.answers as object) : undefined,
     },
   });
 
-  // Find the matching brief for this job (optional — vet runs with or without one)
-  const brief = await prisma.hiringBrief.findFirst({
-    where: { workableJobId: candidate.job.id },
-  });
-
-  // When no brief is linked, fetch the live job description as role context
-  let jobRoleSummary: string | undefined;
-  if (!brief) {
-    try {
-      const job = await getJob(candidate.job.shortcode);
-      jobRoleSummary = job.description
-        ? job.description.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim().slice(0, 1000)
-        : undefined;
-    } catch {
-      // Non-fatal — vet will proceed without role description
-    }
-  }
-
-  const roleTitle = brief?.roleTitle ?? candidate.job.title;
-  const roleSummary = brief?.roleSummary ?? jobRoleSummary;
-
-  // Run AI vetting — wrapped so Workable doesn't retry on transient AI failures
-  try {
-    const prompt = buildVetPrompt(
-      candidate,
-      roleTitle,
-      brief?.hardSkills ?? null,
-      brief?.softSkills ?? null,
-      roleSummary
-    );
-
-    const raw = await generateText(RESUME_VET_SYSTEM_PROMPT, prompt);
-
-    let vetResult: {
-      status: string;
-      score: number;
-      summary: string;
-      suggestedInterviewQuestions: string[];
-    };
-
-    try {
-      const cleaned = raw.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim();
-      vetResult = JSON.parse(cleaned);
-    } catch {
-      console.error("Failed to parse AI vet result for candidate", candidate.id, raw);
-      return NextResponse.json({ received: true });
-    }
-
-    // Update candidate cache with vet result
-    await prisma.candidateCache.update({
-      where: { id: cached.id },
-      data: {
-        aiVetScore: vetResult.score,
-        aiVetStatus: vetResult.status,
-        aiVetSummary: vetResult.summary,
-        aiVetQuestions: vetResult.suggestedInterviewQuestions,
-        aiVetRunAt: new Date(),
-        briefId: brief?.id ?? null,
-      },
-    });
-
-    // Write vet result back to Workable as a HR-only note
-    const noteBody = `[AI Vet — HR Only]\nStatus: ${vetResult.status}\nScore: ${vetResult.score}/100\n\n${vetResult.summary}\n\nSuggested interview questions:\n${vetResult.suggestedInterviewQuestions.map((q, i) => `${i + 1}. ${q}`).join("\n")}`;
-
-    await addCandidateNote(candidate.id, noteBody);
-
-    await prisma.auditEvent.create({
-      data: {
-        actorEmail: "ai-vet-agent",
-        eventType: "AI_VET_RUN",
-        entityId: cached.id,
-        entityType: "CandidateCache",
-        metadata: { score: vetResult.score, status: vetResult.status },
-      },
-    });
-  } catch (err) {
-    console.error("AI vet pipeline failed for candidate", candidate.id, err);
-    // Return 200 to prevent Workable retry storm — vet can be re-run manually
-  }
+  // Fire-and-forget — respond 200 immediately, vet in background
+  vetCandidate(candidate.id).catch(console.error);
 
   return NextResponse.json({ received: true });
 }
