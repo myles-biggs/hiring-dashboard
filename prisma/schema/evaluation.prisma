@@ -1,0 +1,26 @@
+// ─── Evaluation ──────────────────────────────────────────────────────────────
+
+model Evaluation {
+  id            String         @id @default(cuid())
+  candidateId   String
+  candidate     Candidate      @relation(fields: [candidateId], references: [id])
+
+  type          EvaluationType
+  modelUsed     String
+  promptVersion String
+  rawOutput     String         @db.Text
+
+  score         Int?
+  bucket        String?
+  rationale     String?        @db.Text
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([candidateId])
+}
+
+enum EvaluationType {
+  JOB_POSTING_FIT
+  CULTURE_FIT
+}
