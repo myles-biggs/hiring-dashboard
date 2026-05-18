@@ -27,6 +27,34 @@ function formatSalaryRange(min: number | null, max: number | null): string {
   return "Not specified";
 }
 
+/** Standalone overload — accepts direct inputs, no HiringBrief dependency. */
+export interface StandaloneJobPostArgs {
+  roleTitle: string;
+  roleContext: string;
+  compRange?: string;
+  location?: string;
+  hardSkills?: string[];
+  softSkills?: string[];
+}
+
+export function buildStandaloneJobPostPrompt(args: StandaloneJobPostArgs): string {
+  const lines = [
+    `Generate a complete Level Agency job post for the following role. Both English and French Canadian versions are required.`,
+    ``,
+    `Role details:`,
+    `- Role title: ${args.roleTitle}`,
+    `- Role context / description: ${args.roleContext}`,
+    `- Compensation range: ${args.compRange ?? "Not specified"}`,
+    `- Location: ${args.location ?? "Remote – Canada/US"}`,
+    `- Hard skills required: ${args.hardSkills?.join(", ") || "Not specified"}`,
+    `- Soft skills required: ${args.softSkills?.join(", ") || "Not specified"}`,
+    ``,
+    `Return a JSON object with keys "english" and "french". Both must be complete, full-length job posts.`,
+  ];
+  return lines.join("\n");
+}
+
+/** Brief-flow overload — kept intact for existing callers in the briefs workflow. */
 export function buildJobPostPrompt(brief: HiringBrief): string {
   return `Generate a complete Level Agency job post for the following role. Both English and French Canadian versions are required.
 
