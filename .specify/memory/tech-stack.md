@@ -37,12 +37,13 @@
 
 ## AI / Integrations
 
-| Package                  | Notes                      |
-| ------------------------ | -------------------------- |
-| @google/generative-ai    | Gemini JD generation       |
-| Asana REST API           | Hiring brief intake source |
-| Workable REST API        | Job posting target         |
-| Slack (via lib/integrations/slack.ts) | Notifications  |
+| Package                  | Version | Notes                      |
+| ------------------------ | ------- | -------------------------- |
+| @anthropic-ai/sdk        | ^0.96.0 | Claude candidate evaluation |
+| @google/generative-ai    |         | Gemini JD generation       |
+| Asana REST API           |         | Hiring brief intake source |
+| Workable REST API        |         | Job posting target         |
+| Slack (via lib/integrations/slack.ts) |  | Notifications  |
 
 ## Forms & Validation
 

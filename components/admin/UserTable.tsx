@@ -5,7 +5,7 @@ type UserRow = {
   id: string;
   name: string | null;
   email: string;
-  role: "HIRING_MANAGER" | "TALENT_ACQUISITION" | "ADMIN";
+  role: "HIRING_MANAGER" | "TALENT_ACQUISITION" | "ADMIN" | "TA" | "VIEWER";
   isApprover: boolean;
   createdAt: Date;
 };
@@ -14,6 +14,8 @@ const ROLE_LABELS: Record<string, string> = {
   HIRING_MANAGER: "Hiring Manager",
   TALENT_ACQUISITION: "Talent Acquisition",
   ADMIN: "Admin",
+  TA: "TA",
+  VIEWER: "Viewer",
 };
 
 export function UserTable({ users: initialUsers }: { users: UserRow[] }) {

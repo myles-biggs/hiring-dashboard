@@ -27,6 +27,8 @@ enum Role {
   HIRING_MANAGER
   TALENT_ACQUISITION
   ADMIN
+  TA
+  VIEWER
 }
 
 model Account {

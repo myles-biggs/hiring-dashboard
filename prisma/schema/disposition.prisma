@@ -1,0 +1,38 @@
+enum DispositionAction {
+  ADVANCE
+  SCHEDULE_INTERVIEW
+  PANEL_REVIEW
+  SECOND_OPINION
+  HOLD
+  DISQUALIFY
+}
+
+enum DispositionStatus {
+  RECOMMENDED
+  APPROVED
+  OVERRIDDEN
+}
+
+model Disposition {
+  id                String   @id @default(cuid())
+  candidate         Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  candidateId       String
+
+  recommendedAction DispositionAction
+  recommendedReason String   @db.Text
+
+  status            DispositionStatus @default(RECOMMENDED)
+  approvedAction    DispositionAction?
+  approvedBy        String?
+  approvedAt        DateTime?
+  approvalNotes     String?  @db.Text
+
+  workableUpdated   Boolean  @default(false)
+  workableError     String?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([candidateId])
+  @@index([status])
+}

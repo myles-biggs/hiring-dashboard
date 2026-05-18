@@ -1,0 +1,34 @@
+enum EvaluationType {
+  JOB_POSTING_FIT
+  CULTURE_FIT
+}
+
+enum EvaluationSource {
+  RESUME
+  COVER_LETTER
+  APPLICATION_ANSWERS
+  LINKEDIN_URL
+  TRANSCRIPT
+}
+
+model Evaluation {
+  id              String   @id @default(cuid())
+  candidate       Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  candidateId     String
+  type            EvaluationType
+  sources         EvaluationSource[]
+
+  score           Int
+  bucket          String
+  rationale       String   @db.Text
+  dimensionScores Json?
+
+  modelUsed       String
+  promptVersion   String
+  rawOutput       String   @db.Text
+
+  createdAt       DateTime @default(now())
+
+  @@index([candidateId, type])
+  @@index([type, createdAt])
+}

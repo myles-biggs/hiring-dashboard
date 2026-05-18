@@ -1,0 +1,20 @@
+model InterviewTranscript {
+  id                  String   @id @default(cuid())
+  candidate           Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  candidateId         String
+
+  zoomMeetingId       String   @unique
+  zoomRecordingId     String?
+  transcriptText      String   @db.Text
+  meetingDate         DateTime
+  interviewerEmails   String[]
+
+  matchMethod         String
+
+  processed           Boolean  @default(false)
+  processedAt         DateTime?
+
+  createdAt           DateTime @default(now())
+
+  @@index([candidateId])
+}

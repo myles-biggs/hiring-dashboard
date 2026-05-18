@@ -1,0 +1,22 @@
+model Candidate {
+  id                   String   @id @default(cuid())
+  workableCandidateId  String   @unique
+  workableJobShortcode String
+  workableJobTitle     String
+  fullName             String
+  email                String?
+  resumeUrl            String?
+  linkedinUrl          String?
+  coverLetter          String?  @db.Text
+  applicationAnswers   Json?
+  applicationSource    String?
+
+  evaluations          Evaluation[]
+  dispositions         Disposition[]
+  transcripts          InterviewTranscript[]
+
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([workableJobShortcode])
+}
