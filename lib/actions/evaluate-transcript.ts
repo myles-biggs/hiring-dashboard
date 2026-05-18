@@ -6,7 +6,7 @@ import { generateStructured, CLAUDE_MODEL } from "@/lib/integrations/claude";
 import { addCandidateComment, setCandidateStarRating } from "@/lib/integrations/workable";
 import { buildCulturePrompt, CULTURE_PROMPT_VERSION } from "@/lib/prompts/culture-eval";
 import { cultureFitOutputSchema } from "@/lib/schemas/evaluation";
-import { computeRecommendedAction } from "@/lib/utils/bucket";
+import { cultureBucket, jobPostingBucket, recommendedAction } from "@/lib/utils/bucket";
 import { prisma } from "@/lib/utils/prisma";
 import { EvaluationType, Prisma } from "@prisma/client";
 import { getServerSession } from "next-auth";
@@ -36,18 +36,17 @@ export async function evaluateTranscript(
     where: { workableCandidateId: candidate.workableCandidateId },
     include: { brief: true },
   });
-  const jobTitle = candidateCache?.brief?.roleTitle ?? "Unknown Role";
+  const jobTitle = candidateCache?.brief?.roleTitle ?? candidate.workableJobTitle;
 
   const { system, user } = buildCulturePrompt({
-    transcript: transcript.rawText,
-    candidateName: candidate.name,
+    transcript: transcript.transcriptText,
+    candidateName: candidate.fullName,
     jobTitle,
   });
 
   const result = await generateStructured(system, user, cultureFitOutputSchema);
 
-  const dimValues = Object.values(result.dimensionScores).map((d) => d.score);
-  const computedTotal = dimValues.reduce((sum, s) => sum + s, 0);
+  const cb = cultureBucket(result.totalScore);
 
   const evaluation = await prisma.evaluation.create({
     data: {
@@ -58,8 +57,9 @@ export async function evaluateTranscript(
       promptVersion: CULTURE_PROMPT_VERSION,
       rawOutput: JSON.stringify(result),
       dimensionScores: result.dimensionScores as unknown as Prisma.InputJsonValue,
-      totalScore: computedTotal,
-      starRating: result.starRating,
+      score: result.totalScore,
+      bucket: cb,
+      rationale: result.rationale,
     },
   });
 
@@ -68,10 +68,8 @@ export async function evaluateTranscript(
     orderBy: { createdAt: "desc" },
   });
 
-  const recommendedAction = computeRecommendedAction(
-    computedTotal,
-    jdEval?.starRating ?? null
-  );
+  const jdBucket = jdEval ? jobPostingBucket(jdEval.score) : "POSSIBLE";
+  const { action: recAction, reason: recReason } = recommendedAction({ jdBucket, cultureBucket: cb });
 
   const existingDisposition = await prisma.disposition.findFirst({
     where: { candidateId: candidate.id, status: "RECOMMENDED" },
@@ -80,25 +78,27 @@ export async function evaluateTranscript(
   if (existingDisposition) {
     await prisma.disposition.update({
       where: { id: existingDisposition.id },
-      data: { recommendedAction },
+      data: { recommendedAction: recAction, recommendedReason: recReason },
     });
   } else {
     await prisma.disposition.create({
       data: {
         candidateId: candidate.id,
         status: "RECOMMENDED",
-        recommendedAction,
+        recommendedAction: recAction,
+        recommendedReason: recReason,
       },
     });
   }
 
+  const starRating = result.starRating as 1 | 2 | 3 | 4 | 5;
   await Promise.allSettled([
-    setCandidateStarRating(candidate.workableCandidateId, result.starRating),
+    setCandidateStarRating(candidate.workableCandidateId, starRating),
     addCandidateComment(
       candidate.workableCandidateId,
-      `[AI Culture Eval — HR Only]\nCandidate: ${candidate.name}\n` +
-        `Culture Fit: ${"★".repeat(result.starRating)}${"☆".repeat(5 - result.starRating)} (${computedTotal}/40)\n\n` +
-        result.summary
+      `[AI Culture Eval — HR Only]\nCandidate: ${candidate.fullName}\n` +
+        `Culture Fit: ${"★".repeat(result.starRating)}${"☆".repeat(5 - result.starRating)} (${result.totalScore}/40)\n\n` +
+        result.rationale
     ),
   ]);
 

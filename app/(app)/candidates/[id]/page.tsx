@@ -35,7 +35,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
   return (
     <div className="mx-auto max-w-3xl p-6">
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold">{candidate.name}</h1>
+        <h1 className="text-2xl font-semibold">{candidate.fullName}</h1>
         <p className="text-gray-500">{candidate.workableJobTitle}</p>
         {candidate.linkedinUrl && (
           <a
@@ -83,7 +83,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
           dispositionId={disposition.id}
           recommendedAction={disposition.recommendedAction}
           status={disposition.status}
-          notes={disposition.notes ?? undefined}
+          notes={disposition.approvalNotes ?? undefined}
         />
       )}
 

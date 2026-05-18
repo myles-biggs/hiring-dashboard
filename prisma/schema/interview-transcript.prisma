@@ -18,3 +18,12 @@ model InterviewTranscript {
 
   @@index([candidateId])
 }
+
+model UnmatchedTranscript {
+  id            String   @id @default(cuid())
+  zoomMeetingId String   @unique
+  meetingDate   DateTime
+  rawPayload    Json
+
+  createdAt     DateTime @default(now())
+}

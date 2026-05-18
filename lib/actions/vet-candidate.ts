@@ -25,8 +25,7 @@ export async function vetCandidate(candidateId: string): Promise<{
         candidate.applicationAnswers ??
         (detail.answers ? (detail.answers as unknown as object) : null),
       linkedinUrl: candidate.linkedinUrl ?? detail.linkedin_url ?? null,
-      tags: candidate.tags.length > 0 ? candidate.tags : (detail.tags ?? []),
-      source: candidate.source ?? detail.source?.name ?? null,
+      applicationSource: candidate.applicationSource ?? detail.source?.name ?? null,
     },
     jobTitle: candidate.workableJobTitle,
   });
@@ -51,14 +50,14 @@ export async function vetCandidate(candidateId: string): Promise<{
   });
 
   const bucket = jobPostingBucket(result.score);
-  const action = recommendedAction({ jdBucket: bucket, cultureBucket: null });
+  const { action, reason } = recommendedAction({ jdBucket: bucket, cultureBucket: null });
 
   const disposition = await prisma.disposition.create({
     data: {
       candidateId: candidate.id,
       status: "RECOMMENDED",
       recommendedAction: action,
-      rationale: result.rationale,
+      recommendedReason: reason,
     },
   });
 

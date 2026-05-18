@@ -36,15 +36,13 @@ Important rules:
     hardSkills?.length ? `Required hard skills: ${hardSkills.join(", ")}` : "",
     softSkills?.length ? `Required soft skills: ${softSkills.join(", ")}` : "",
     "",
-    `Candidate name: ${candidate.name}`,
-    `Current stage: ${candidate.currentStage}`,
+    `Candidate name: ${candidate.fullName}`,
     candidate.coverLetter ? `Cover letter:\n${candidate.coverLetter}` : "Cover letter: Not provided",
     candidate.applicationAnswers
       ? `Application answers:\n${JSON.stringify(candidate.applicationAnswers, null, 2)}`
       : "Application answers: Not provided",
     candidate.linkedinUrl ? `LinkedIn: ${candidate.linkedinUrl}` : "",
-    candidate.tags?.length ? `Tags: ${candidate.tags.join(", ")}` : "",
-    candidate.source ? `Source: ${candidate.source}` : "",
+    candidate.applicationSource ? `Source: ${candidate.applicationSource}` : "",
   ];
 
   const user = lines.filter(Boolean).join("\n");

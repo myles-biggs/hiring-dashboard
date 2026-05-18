@@ -39,8 +39,7 @@ export async function POST(
           candidate.applicationAnswers ??
           (detail.answers ? (detail.answers as unknown as object) : null),
         linkedinUrl: candidate.linkedinUrl ?? detail.linkedin_url ?? null,
-        tags: candidate.tags.length > 0 ? candidate.tags : (detail.tags ?? []),
-        source: candidate.source ?? detail.source?.name ?? null,
+        applicationSource: candidate.applicationSource ?? detail.source?.name ?? null,
       },
       jobTitle: candidate.workableJobTitle,
     });
@@ -51,6 +50,8 @@ export async function POST(
       jobPostingFitOutputSchema
     );
 
+    const bucket = jobPostingBucket(result.score);
+
     const evaluation = await prisma.evaluation.create({
       data: {
         candidateId: candidate.id,
@@ -59,20 +60,20 @@ export async function POST(
         promptVersion: VETTING_PROMPT_VERSION,
         rawOutput: JSON.stringify(result),
         score: result.score,
-        bucket: jobPostingBucket(result.score),
+        bucket,
         rationale: result.rationale,
+        sources: result.sources,
       },
     });
 
-    const bucket = jobPostingBucket(result.score);
-    const action = recommendedAction({ jdBucket: bucket, cultureBucket: null });
+    const { action, reason } = recommendedAction({ jdBucket: bucket, cultureBucket: null });
 
     const disposition = await prisma.disposition.create({
       data: {
         candidateId: candidate.id,
         status: "RECOMMENDED",
         recommendedAction: action,
-        rationale: result.rationale,
+        recommendedReason: reason,
       },
     });
 

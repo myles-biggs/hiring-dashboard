@@ -10,7 +10,7 @@ import { getServerSession } from "next-auth";
 
 export async function approveDisposition(
   dispositionId: string,
-  notes?: string
+  approvalNotes?: string
 ): Promise<void> {
   const session = await getServerSession(authOptions);
   requireRole(session, "TALENT_ACQUISITION", "ADMIN");
@@ -27,7 +27,7 @@ export async function approveDisposition(
       status: DispositionStatus.APPROVED,
       approvedBy: session!.user.email ?? undefined,
       approvedAt: new Date(),
-      notes: notes ?? disposition.notes,
+      approvalNotes: approvalNotes ?? disposition.approvalNotes,
     },
   });
 
@@ -57,7 +57,7 @@ export async function approveDisposition(
 export async function overrideDisposition(
   dispositionId: string,
   newAction: DispositionAction,
-  notes: string
+  approvalNotes: string
 ): Promise<void> {
   const session = await getServerSession(authOptions);
   requireRole(session, "TALENT_ACQUISITION", "ADMIN");
@@ -73,7 +73,7 @@ export async function overrideDisposition(
     data: {
       status: DispositionStatus.OVERRIDDEN,
       recommendedAction: newAction,
-      notes,
+      approvalNotes,
       approvedBy: session!.user.email ?? undefined,
       approvedAt: new Date(),
     },
@@ -84,7 +84,7 @@ export async function overrideDisposition(
       await disqualifyCandidate(
         disposition.candidate.workableJobShortcode,
         disposition.candidate.workableCandidateId,
-        notes
+        approvalNotes
       );
       await prisma.disposition.update({
         where: { id: dispositionId },

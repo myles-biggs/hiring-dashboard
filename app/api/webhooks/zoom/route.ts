@@ -1,5 +1,5 @@
 import { getMeetingParticipants, getTranscript } from "@/lib/integrations/zoom";
-import { zoomTranscriptCompletedPayloadSchema } from "@/lib/schemas/transcript";
+import { zoomTranscriptWebhookSchema } from "@/lib/schemas/transcript";
 import { prisma } from "@/lib/utils/prisma";
 import { Prisma } from "@prisma/client";
 import { createHmac } from "crypto";
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const result = zoomTranscriptCompletedPayloadSchema.safeParse(parsed);
+  const result = zoomTranscriptWebhookSchema.safeParse(parsed);
   if (!result.success) {
     // Not the event type we handle — return 200 so Zoom doesn't retry
     return NextResponse.json({ received: true });
@@ -65,7 +65,8 @@ export async function POST(req: NextRequest) {
 
   // Find the transcript recording file (TRANSCRIPT type, .vtt)
   const transcriptFile = object.recording_files.find(
-    (f) => f.file_type.toUpperCase() === "TRANSCRIPT"
+    (f: { file_type: string; id?: string; download_url: string; status: string }) =>
+      f.file_type.toUpperCase() === "TRANSCRIPT"
   );
 
   if (!transcriptFile) {
@@ -75,7 +76,7 @@ export async function POST(req: NextRequest) {
 
   // Download transcript and fetch participants in parallel
   const [rawText, participantEmails] = await Promise.all([
-    getTranscript(transcriptFile.id),
+    getTranscript(transcriptFile.id ?? transcriptFile.download_url),
     getMeetingParticipants(meetingId).catch((err: unknown) => {
       console.error(`[zoom-webhook] Failed to fetch participants for ${meetingId}`, err);
       return [] as string[];
@@ -127,11 +128,11 @@ export async function POST(req: NextRequest) {
     data: {
       candidateId: candidate.id,
       zoomMeetingId: meetingId,
-      recordingFileId: transcriptFile.id,
+      zoomRecordingId: transcriptFile.id,
       meetingDate,
-      hostEmail,
+      interviewerEmails: hostEmail ? [hostEmail] : [],
       matchMethod,
-      rawText,
+      transcriptText: rawText,
     },
   });
 

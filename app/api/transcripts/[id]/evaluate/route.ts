@@ -4,7 +4,7 @@ import { generateStructured, CLAUDE_MODEL } from "@/lib/integrations/claude";
 import { addCandidateComment, setCandidateStarRating } from "@/lib/integrations/workable";
 import { buildCulturePrompt, CULTURE_PROMPT_VERSION } from "@/lib/prompts/culture-eval";
 import { cultureFitOutputSchema } from "@/lib/schemas/evaluation";
-import { computeRecommendedAction } from "@/lib/utils/bucket";
+import { cultureBucket, jobPostingBucket, recommendedAction } from "@/lib/utils/bucket";
 import { prisma } from "@/lib/utils/prisma";
 import { EvaluationType, Prisma } from "@prisma/client";
 import type { Session } from "next-auth";
@@ -12,11 +12,9 @@ import { getServerSession } from "next-auth";
 import { NextRequest, NextResponse } from "next/server";
 
 function isAuthorized(req: NextRequest, session: Session | null): boolean {
-  // Allow TALENT_ACQUISITION and ADMIN roles via session
   if (session?.user.role === "TALENT_ACQUISITION" || session?.user.role === "ADMIN") {
     return true;
   }
-  // Allow internal service calls with the service key
   const serviceKey = process.env.INTERNAL_SERVICE_KEY;
   if (serviceKey) {
     const authHeader = req.headers.get("x-service-key");
@@ -52,24 +50,21 @@ export async function POST(
 
     const candidate = transcript.candidate;
 
-    // We need the job title — fetch from latest brief via candidateCache if available
     const candidateCache = await prisma.candidateCache.findFirst({
       where: { workableCandidateId: candidate.workableCandidateId },
       include: { brief: true },
     });
-    const jobTitle = candidateCache?.brief?.roleTitle ?? "Unknown Role";
+    const jobTitle = candidateCache?.brief?.roleTitle ?? candidate.workableJobTitle;
 
     const { system, user } = buildCulturePrompt({
-      transcript: transcript.rawText,
-      candidateName: candidate.name,
+      transcript: transcript.transcriptText,
+      candidateName: candidate.fullName,
       jobTitle,
     });
 
     const result = await generateStructured(system, user, cultureFitOutputSchema);
 
-    // Compute totalScore from dimension scores as a safety check
-    const dimValues = Object.values(result.dimensionScores).map((d) => d.score);
-    const computedTotal = dimValues.reduce((sum, s) => sum + s, 0);
+    const cb = cultureBucket(result.totalScore);
 
     const evaluation = await prisma.evaluation.create({
       data: {
@@ -80,23 +75,20 @@ export async function POST(
         promptVersion: CULTURE_PROMPT_VERSION,
         rawOutput: JSON.stringify(result),
         dimensionScores: result.dimensionScores as unknown as Prisma.InputJsonValue,
-        totalScore: computedTotal,
-        starRating: result.starRating,
+        score: result.totalScore,
+        bucket: cb,
+        rationale: result.rationale,
       },
     });
 
-    // Find latest JOB_POSTING_FIT evaluation for cross-signal disposition
     const jdEval = await prisma.evaluation.findFirst({
       where: { candidateId: candidate.id, type: EvaluationType.JOB_POSTING_FIT },
       orderBy: { createdAt: "desc" },
     });
 
-    const recommendedAction = computeRecommendedAction(
-      computedTotal,
-      jdEval?.starRating ?? null
-    );
+    const jdBucket = jdEval ? jobPostingBucket(jdEval.score) : "POSSIBLE";
+    const { action: recAction, reason: recReason } = recommendedAction({ jdBucket, cultureBucket: cb });
 
-    // Upsert disposition — only RECOMMENDED, never auto-approve
     const existingDisposition = await prisma.disposition.findFirst({
       where: { candidateId: candidate.id, status: "RECOMMENDED" },
     });
@@ -104,28 +96,28 @@ export async function POST(
     if (existingDisposition) {
       await prisma.disposition.update({
         where: { id: existingDisposition.id },
-        data: { recommendedAction },
+        data: { recommendedAction: recAction, recommendedReason: recReason },
       });
     } else {
       await prisma.disposition.create({
         data: {
           candidateId: candidate.id,
           status: "RECOMMENDED",
-          recommendedAction,
+          recommendedAction: recAction,
+          recommendedReason: recReason,
         },
       });
     }
 
-    // Update Workable — fire these in parallel, both non-fatal
+    const starRating = result.starRating as 1 | 2 | 3 | 4 | 5;
     await Promise.allSettled([
-      setCandidateStarRating(candidate.workableCandidateId, result.starRating),
+      setCandidateStarRating(candidate.workableCandidateId, starRating),
       addCandidateComment(
         candidate.workableCandidateId,
-        buildWorkableComment(candidate.name, result.starRating, computedTotal, result.summary)
+        buildWorkableComment(candidate.fullName, result.starRating, result.totalScore, result.rationale)
       ),
     ]);
 
-    // Mark transcript processed
     await prisma.interviewTranscript.update({
       where: { id: transcript.id },
       data: { processed: true, processedAt: new Date() },
@@ -141,13 +133,13 @@ function buildWorkableComment(
   candidateName: string,
   starRating: number,
   totalScore: number,
-  summary: string
+  rationale: string
 ): string {
   const stars = "★".repeat(starRating) + "☆".repeat(5 - starRating);
   return (
     `[AI Culture Eval — HR Only]\n` +
     `Candidate: ${candidateName}\n` +
     `Culture Fit: ${stars} (${totalScore}/40)\n\n` +
-    summary
+    rationale
   );
 }

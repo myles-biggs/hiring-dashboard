@@ -7,7 +7,6 @@ import { NextRequest, NextResponse } from "next/server";
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
 
-  // Prefer HMAC-SHA256 signature when present; fall back to token in query string
   const signatureHeader = req.headers.get("x-workable-signature");
   if (signatureHeader) {
     const valid = await verifyWebhookSignature(rawBody, signatureHeader);
@@ -38,31 +37,27 @@ export async function POST(req: NextRequest) {
   }
 
   const wc = parsed.data.data.candidate;
+  const job = parsed.data.data.job;
   if (!wc) return NextResponse.json({ received: true });
-
-  const stageName =
-    typeof wc.stage === "string" ? wc.stage : wc.stage.name;
 
   const candidate = await prisma.candidate.upsert({
     where: { workableCandidateId: wc.id },
     update: {
-      currentStage: stageName,
       updatedAt: new Date(),
     },
     create: {
       workableCandidateId: wc.id,
-      workableJobShortcode: wc.job.shortcode,
-      workableJobTitle: wc.job.title,
-      name: wc.name,
-      email: wc.email,
-      currentStage: stageName,
-      appliedAt: new Date(wc.created_at),
+      workableJobShortcode: job.shortcode,
+      workableJobTitle: job.title,
+      fullName: wc.name,
+      email: wc.email ?? null,
       resumeUrl: wc.resume_url ?? null,
-      linkedinUrl: wc.linkedin_url ?? null,
+      linkedinUrl: wc.linkedin_profile_url ?? null,
       coverLetter: wc.cover_letter ?? null,
-      tags: wc.tags ?? [],
-      source: wc.source?.name ?? null,
-      applicationAnswers: wc.answers ? (wc.answers as object) : undefined,
+      applicationSource: wc.source?.name ?? null,
+      applicationAnswers: wc.application_answers
+        ? (wc.application_answers as object)
+        : undefined,
     },
   });
 

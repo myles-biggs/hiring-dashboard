@@ -36,7 +36,7 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
         take: 1,
       },
     },
-    orderBy: { appliedAt: "desc" },
+    orderBy: { createdAt: "desc" },
   });
 
   return (
@@ -69,7 +69,7 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
                 <tr key={c.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3">
                     <Link href={`/candidates/${c.id}`} className="font-medium text-blue-600 hover:underline">
-                      {c.name}
+                      {c.fullName}
                     </Link>
                   </td>
                   <td className="px-4 py-3 text-gray-600">{c.workableJobTitle}</td>
@@ -88,7 +88,7 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
                     )}
                   </td>
                   <td className="px-4 py-3 text-gray-500">
-                    {c.appliedAt.toLocaleDateString()}
+                    {c.createdAt.toLocaleDateString()}
                   </td>
                 </tr>
               );
