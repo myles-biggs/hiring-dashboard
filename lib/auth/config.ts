@@ -48,11 +48,11 @@ export const authOptions: NextAuthOptions = {
         .map((e) => e.trim())
         .filter(Boolean);
 
-      let role: Role = Role.HIRING_MANAGER;
+      // Default: any authenticated @level.agency user is a VIEWER
+      let role: Role = Role.VIEWER;
       if (adminEmails.includes(user.email)) role = Role.ADMIN;
       else if (taEmails.includes(user.email)) role = Role.TALENT_ACQUISITION;
       else if (newTaEmails.includes(user.email)) role = Role.TA;
-      else if (viewerEmails.includes(user.email)) role = Role.VIEWER;
 
       // Update only — never create. The Prisma adapter handles user creation.
       // On first sign-in the user doesn't exist yet so updateMany is a no-op.
