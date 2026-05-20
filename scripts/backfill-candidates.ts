@@ -20,7 +20,8 @@ import { jobPostingBucket, recommendedAction } from "../lib/utils/bucket";
 import { prisma } from "../lib/utils/prisma";
 
 const DELAY_MS = 1500;        // between Claude calls
-const WORKABLE_DELAY_MS = 300; // between Workable API calls
+const WORKABLE_DELAY_MS = 500; // between Workable API calls
+const JOB_DELAY_MS = 2000;    // between jobs
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
@@ -39,13 +40,27 @@ async function main() {
 
   for (const job of jobs) {
     console.log(`-> ${job.title} (${job.shortcode})`);
+    await sleep(JOB_DELAY_MS);
     let active: Awaited<ReturnType<typeof listCandidatesForJob>> = [];
     try {
       const candidates = await listCandidatesForJob(job.shortcode);
       active = candidates.filter((c) => !c.disqualified);
     } catch (err) {
-      console.warn(`   ! Skipping job (API error): ${err instanceof Error ? err.message : String(err)}`);
-      continue;
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("429")) {
+        console.warn(`   ! Rate limited — waiting 30s before retrying...`);
+        await sleep(30000);
+        try {
+          const candidates = await listCandidatesForJob(job.shortcode);
+          active = candidates.filter((c) => !c.disqualified);
+        } catch (retryErr) {
+          console.warn(`   ! Skipping job after retry: ${retryErr instanceof Error ? retryErr.message : String(retryErr)}`);
+          continue;
+        }
+      } else {
+        console.warn(`   ! Skipping job (API error): ${msg}`);
+        continue;
+      }
     }
     console.log(`   ${active.length} active candidates`);
 
