@@ -38,8 +38,14 @@ async function main() {
 
   for (const job of jobs) {
     console.log(`-> ${job.title} (${job.shortcode})`);
-    const candidates = await listCandidatesForJob(job.shortcode);
-    const active = candidates.filter((c) => !c.disqualified);
+    let active: Awaited<ReturnType<typeof listCandidatesForJob>> = [];
+    try {
+      const candidates = await listCandidatesForJob(job.shortcode);
+      active = candidates.filter((c) => !c.disqualified);
+    } catch (err) {
+      console.warn(`   ! Skipping job (API error): ${err instanceof Error ? err.message : String(err)}`);
+      continue;
+    }
     console.log(`   ${active.length} active candidates`);
 
     for (const wc of active) {
