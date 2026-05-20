@@ -3,7 +3,7 @@ import { WorkableCandidate, WorkableEmailTemplate, WorkableJob } from "@/types/w
 const BASE_URL = `https://${process.env.WORKABLE_SUBDOMAIN}.workable.com/spi/v3`;
 
 async function workableFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
+const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
     headers: {
       Authorization: `Bearer ${process.env.WORKABLE_API_TOKEN}`,
@@ -216,9 +216,12 @@ export async function listPublishedJobs(): Promise<WorkableJob[]> {
   while (nextPath) {
     const page: JobsPage = await workableFetch<JobsPage>(nextPath);
     jobs.push(...page.jobs);
-    nextPath = page.paging?.next
-      ? new URL(page.paging.next).pathname + new URL(page.paging.next).search
-      : null;
+    if (page.paging?.next) {
+      const nextUrl = new URL(page.paging.next);
+      nextPath = nextUrl.pathname.replace(/^\/spi\/v3/, "") + nextUrl.search;
+    } else {
+      nextPath = null;
+    }
   }
 
   return jobs;
@@ -252,9 +255,13 @@ export async function listCandidatesForJob(
     );
 
     candidates.push(...normalized);
-    nextPath = page.paging?.next
-      ? new URL(page.paging.next).pathname + new URL(page.paging.next).search
-      : null;
+    if (page.paging?.next) {
+      const nextUrl = new URL(page.paging.next);
+      // Strip the /spi/v3 prefix so it doesn't duplicate BASE_URL
+      nextPath = nextUrl.pathname.replace(/^\/spi\/v3/, "") + nextUrl.search;
+    } else {
+      nextPath = null;
+    }
   }
 
   return candidates;
