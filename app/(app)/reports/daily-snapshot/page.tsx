@@ -28,7 +28,7 @@ export default async function DailySnapshotPage() {
 
   const summaryData: Record<string, unknown> = {
     interviewsToday: data.interviewsToday.length,
-    pipelineMovements: data.pipelineMovement.length,
+    scoredToday: data.recentlyScored.length,
     pendingApprovals: data.pendingApprovals,
   };
 
@@ -55,7 +55,7 @@ export default async function DailySnapshotPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
           { label: "Interviews Today", value: data.interviewsToday.length },
-          { label: "Pipeline Movements", value: data.pipelineMovement.length },
+          { label: "Scored Today", value: data.recentlyScored.length },
           { label: "Pending Approvals", value: data.pendingApprovals },
         ].map(({ label, value }) => (
           <Card key={label}>
@@ -124,31 +124,31 @@ export default async function DailySnapshotPage() {
         </Card>
       </section>
 
-      {/* Pipeline movement */}
+      {/* Scored today */}
       <section>
         <h2 className="text-base font-heading font-semibold text-foreground mb-3">
-          Pipeline Movement
+          Scored Today
         </h2>
         <Card>
-          {data.pipelineMovement.length === 0 ? (
+          {data.recentlyScored.length === 0 ? (
             <CardContent className="p-5">
-              <p className="text-sm text-muted-foreground">No pipeline activity today.</p>
+              <p className="text-sm text-muted-foreground">No candidates scored today.</p>
             </CardContent>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Candidate</TableHead>
-                  <TableHead>Stage</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Bucket</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.pipelineMovement.map((m) => (
+                {data.recentlyScored.map((m) => (
                   <TableRow key={m.candidateId}>
                     <TableCell className="font-medium">{m.name}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {m.fromStage ? `${m.fromStage} → ${m.toStage}` : m.toStage}
-                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{m.jobTitle}</TableCell>
+                    <TableCell className="text-sm">{m.bucket}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

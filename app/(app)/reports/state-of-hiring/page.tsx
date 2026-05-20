@@ -66,39 +66,6 @@ export default async function StateOfHiringPage() {
         ))}
       </div>
 
-      {/* Candidates by stage */}
-      <section>
-        <h2 className="text-base font-heading font-semibold text-foreground mb-3">
-          Candidates by Stage
-        </h2>
-        <Card>
-          <CardContent className="p-5 space-y-2">
-            {Object.entries(data.candidatesByStage).length === 0 && (
-              <p className="text-sm text-muted-foreground">No stage data available.</p>
-            )}
-            {Object.entries(data.candidatesByStage)
-              .sort((a, b) => b[1] - a[1])
-              .map(([stage, count]) => {
-                const max = Math.max(...Object.values(data.candidatesByStage));
-                return (
-                  <div key={stage} className="flex items-center gap-3">
-                    <span className="text-sm text-foreground w-40 truncate">{stage}</span>
-                    <div className="flex-1 bg-muted rounded-full h-2 overflow-hidden">
-                      <div
-                        className="bg-primary h-full rounded-full"
-                        style={{ width: `${Math.round((count / max) * 100)}%` }}
-                      />
-                    </div>
-                    <span className="text-sm text-muted-foreground w-8 text-right">
-                      {count}
-                    </span>
-                  </div>
-                );
-              })}
-          </CardContent>
-        </Card>
-      </section>
-
       {/* Top active jobs */}
       <section>
         <h2 className="text-base font-heading font-semibold text-foreground mb-3">
@@ -156,7 +123,7 @@ export default async function StateOfHiringPage() {
                   <TableRow key={`${d.candidateId}-${d.createdAt.toISOString()}`}>
                     <TableCell className="font-medium">{d.candidateName}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">
-                      {d.jobShortcode}
+                      {d.jobTitle}
                     </TableCell>
                     <TableCell>{d.recommendation}</TableCell>
                     <TableCell className="text-right text-muted-foreground text-sm">
