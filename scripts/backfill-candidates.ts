@@ -1,120 +1,55 @@
 /**
- * Backfill script — loads all published Workable jobs, paginates their
- * active candidates, upserts Candidate records, and triggers vetting.
+ * Backfill script — score all existing Workable candidates not yet in Level Hire DB.
  *
- * Safe to run multiple times — skips candidates already in the DB.
+ * Run: npx tsx scripts/backfill-candidates.ts
  *
- * Usage:
- *   npx tsx scripts/backfill-candidates.ts
+ * Idempotent: skips candidates already scored.
  */
 
-import { config } from "dotenv";
-import { existsSync } from "fs";
-import { resolve } from "path";
-
-for (const f of [".env.local", ".env"]) {
-  const p = resolve(process.cwd(), f);
-  if (existsSync(p)) config({ path: p });
-}
-
-import { PrismaClient } from "@prisma/client";
+import { EvaluationType } from "@prisma/client";
+import { CLAUDE_MODEL, generateStructured } from "../lib/integrations/claude";
 import {
+  getCandidateDetail,
   listCandidatesForJob,
   listPublishedJobs,
-  getCandidateDetail,
   updateCandidateCustomFields,
 } from "../lib/integrations/workable";
-import { generateStructured, CLAUDE_MODEL } from "../lib/integrations/claude";
 import { buildVettingPrompt, VETTING_PROMPT_VERSION } from "../lib/prompts/candidate-vetting";
 import { jobPostingFitOutputSchema } from "../lib/schemas/evaluation";
 import { jobPostingBucket, recommendedAction } from "../lib/utils/bucket";
+import { prisma } from "../lib/utils/prisma";
 
-const prisma = new PrismaClient();
+const DELAY_MS = 1500;
 
-async function vetAndStore(candidateId: string): Promise<void> {
-  const candidate = await prisma.candidate.findUnique({ where: { id: candidateId } });
-  if (!candidate) throw new Error(`Candidate not found: ${candidateId}`);
-
-  const detail = await getCandidateDetail(candidate.workableCandidateId);
-
-  const prompt = buildVettingPrompt({
-    candidate: {
-      ...candidate,
-      coverLetter: candidate.coverLetter ?? detail.cover_letter ?? null,
-      applicationAnswers:
-        candidate.applicationAnswers ??
-        (detail.answers ? (detail.answers as object) : null),
-      linkedinUrl: candidate.linkedinUrl ?? detail.linkedin_url ?? null,
-      tags: candidate.tags.length > 0 ? candidate.tags : (detail.tags ?? []),
-      source: candidate.source ?? detail.source?.name ?? null,
-    },
-    jobTitle: candidate.workableJobTitle,
-  });
-
-  const result = await generateStructured(
-    prompt.system,
-    prompt.user,
-    jobPostingFitOutputSchema,
-  );
-
-  const bucket = jobPostingBucket(result.score);
-  const action = recommendedAction({ jdBucket: bucket, cultureBucket: null });
-
-  await prisma.evaluation.create({
-    data: {
-      candidateId: candidate.id,
-      type: "JOB_POSTING_FIT",
-      modelUsed: CLAUDE_MODEL,
-      promptVersion: VETTING_PROMPT_VERSION,
-      rawOutput: JSON.stringify(result),
-      score: result.score,
-      bucket,
-      rationale: result.rationale,
-    },
-  });
-
-  await prisma.disposition.create({
-    data: {
-      candidateId: candidate.id,
-      status: "RECOMMENDED",
-      recommendedAction: action,
-      rationale: result.rationale,
-    },
-  });
-
-  try {
-    await updateCandidateCustomFields(candidate.workableCandidateId, {
-      jd_match_score: result.score,
-      jd_match_bucket: bucket,
-      jd_match_rationale: result.rationale,
-      recommended_action: action,
-      evaluated_at: new Date().toISOString(),
-    });
-  } catch (e) {
-    console.warn("  Workable custom fields update failed:", e);
-  }
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
 async function main() {
-  console.log("Starting candidate backfill...\n");
+  console.log("=== Level Hire candidate backfill ===\n");
 
   const jobs = await listPublishedJobs();
-  console.log(`Found ${jobs.length} published jobs.\n`);
+  console.log(`Found ${jobs.length} published jobs\n`);
+
+  let totalCandidates = 0;
+  let skipped = 0;
+  let scored = 0;
+  let errors = 0;
 
   for (const job of jobs) {
+    console.log(`-> ${job.title} (${job.shortcode})`);
     const candidates = await listCandidatesForJob(job.shortcode);
     const active = candidates.filter((c) => !c.disqualified);
-
-    console.log(`Job ${job.shortcode} — ${job.title}: ${active.length} active candidates`);
-
-    let skipped = 0;
-    let vetted = 0;
-    let errors = 0;
+    console.log(`   ${active.length} active candidates`);
 
     for (const wc of active) {
+      totalCandidates++;
+
       const existing = await prisma.candidate.findUnique({
         where: { workableCandidateId: wc.id },
-        include: { evaluations: { take: 1 } },
+        include: {
+          evaluations: { where: { type: EvaluationType.JOB_POSTING_FIT }, take: 1 },
+        },
       });
 
       if (existing?.evaluations.length) {
@@ -122,48 +57,107 @@ async function main() {
         continue;
       }
 
-      let dbCandidate = existing;
-      if (!dbCandidate) {
-        const stageName = typeof wc.stage === "string" ? wc.stage : wc.stage.name;
-        dbCandidate = await prisma.candidate.upsert({
+      try {
+        const detail = await getCandidateDetail(wc.id);
+
+        const candidate = await prisma.candidate.upsert({
           where: { workableCandidateId: wc.id },
-          update: {},
           create: {
             workableCandidateId: wc.id,
-            workableJobShortcode: wc.job.shortcode,
-            workableJobTitle: wc.job.title,
-            name: wc.name,
-            email: wc.email,
-            currentStage: stageName,
-            appliedAt: new Date(wc.created_at),
+            workableJobShortcode: job.shortcode,
+            workableJobTitle: job.title,
+            fullName: wc.name,
+            email: wc.email ?? null,
             resumeUrl: wc.resume_url ?? null,
-            linkedinUrl: wc.linkedin_url ?? null,
-            tags: wc.tags ?? [],
+            linkedinUrl: detail.linkedin_url ?? null,
+            coverLetter: detail.cover_letter ?? null,
+            applicationAnswers: detail.answers ? (detail.answers as object) : undefined,
+            applicationSource: detail.source?.name ?? null,
+          },
+          update: {
+            resumeUrl: wc.resume_url ?? undefined,
+            linkedinUrl: detail.linkedin_url ?? undefined,
+            coverLetter: detail.cover_letter ?? undefined,
           },
         });
-      }
 
-      try {
-        await vetAndStore(dbCandidate.id);
-        vetted++;
-        console.log(`  Vetted: ${wc.name}`);
-      } catch (e) {
+        const prompt = buildVettingPrompt({
+          candidate: {
+            ...candidate,
+            coverLetter: candidate.coverLetter ?? detail.cover_letter ?? null,
+            applicationAnswers:
+              candidate.applicationAnswers ??
+              (detail.answers ? (detail.answers as object) : null),
+            linkedinUrl: candidate.linkedinUrl ?? detail.linkedin_url ?? null,
+            applicationSource: candidate.applicationSource ?? detail.source?.name ?? null,
+          },
+          jobTitle: job.title,
+        });
+
+        const result = await generateStructured(
+          prompt.system,
+          prompt.user,
+          jobPostingFitOutputSchema
+        );
+
+        const bucket = jobPostingBucket(result.score);
+        const { action, reason } = recommendedAction({ jdBucket: bucket, cultureBucket: null });
+
+        await prisma.evaluation.create({
+          data: {
+            candidateId: candidate.id,
+            type: EvaluationType.JOB_POSTING_FIT,
+            modelUsed: CLAUDE_MODEL,
+            promptVersion: VETTING_PROMPT_VERSION,
+            rawOutput: JSON.stringify(result),
+            score: result.score,
+            bucket,
+            rationale: result.rationale,
+          },
+        });
+
+        await prisma.disposition.create({
+          data: {
+            candidateId: candidate.id,
+            status: "RECOMMENDED",
+            recommendedAction: action,
+            recommendedReason: reason,
+          },
+        });
+
+        try {
+          await updateCandidateCustomFields(wc.id, {
+            jd_match_score: result.score,
+            jd_match_bucket: bucket,
+            jd_match_rationale: result.rationale,
+            recommended_action: action,
+            evaluated_at: new Date().toISOString(),
+          });
+        } catch (workableErr) {
+          console.warn(
+            `   ! Workable custom field write failed: ${workableErr instanceof Error ? workableErr.message : String(workableErr)}`
+          );
+        }
+
+        scored++;
+        console.log(`   + ${wc.name} — ${result.score} (${bucket}) -> ${action}`);
+        await sleep(DELAY_MS);
+      } catch (err) {
         errors++;
-        console.error(`  Error vetting ${wc.name}:`, e);
+        console.error(
+          `   x ${wc.name} — ${err instanceof Error ? err.message : String(err)}`
+        );
       }
     }
-
-    console.log(
-      `  Done — skipped: ${skipped}, vetted: ${vetted}, errors: ${errors}\n`
-    );
   }
 
-  console.log("Backfill complete.");
-  await prisma.$disconnect();
+  console.log(`\n=== Done ===`);
+  console.log(`Total active candidates: ${totalCandidates}`);
+  console.log(`Already scored (skipped): ${skipped}`);
+  console.log(`Newly scored: ${scored}`);
+  console.log(`Errors: ${errors}`);
 }
 
-main().catch(async (e) => {
-  console.error(e);
-  await prisma.$disconnect();
-  process.exit(1);
-});
+main()
+  .catch(console.error)
+  .finally(() => prisma.$disconnect());
