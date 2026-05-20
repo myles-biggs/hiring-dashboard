@@ -10,9 +10,9 @@ const evaluationSourceSchema = z.enum([
 
 export const jobPostingFitOutputSchema = z.object({
   score: z.number().int().min(0).max(100),
-  bucket: z.enum(["STRONG", "POSSIBLE", "PASS"]),
+  bucket: z.enum(["STRONG", "POSSIBLE", "PASS"]).optional(),
   rationale: z.string().min(1),
-  sources: z.array(evaluationSourceSchema),
+  sources: z.array(evaluationSourceSchema).optional(),
 });
 
 export type JobPostingFitOutput = z.infer<typeof jobPostingFitOutputSchema>;

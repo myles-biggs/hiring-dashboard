@@ -19,7 +19,8 @@ import { jobPostingFitOutputSchema } from "../lib/schemas/evaluation";
 import { jobPostingBucket, recommendedAction } from "../lib/utils/bucket";
 import { prisma } from "../lib/utils/prisma";
 
-const DELAY_MS = 1500;
+const DELAY_MS = 1500;        // between Claude calls
+const WORKABLE_DELAY_MS = 300; // between Workable API calls
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
@@ -64,6 +65,7 @@ async function main() {
       }
 
       try {
+        await sleep(WORKABLE_DELAY_MS);
         const detail = await getCandidateDetail(wc.id);
 
         const candidate = await prisma.candidate.upsert({
